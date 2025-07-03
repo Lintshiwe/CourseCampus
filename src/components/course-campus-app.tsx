@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -13,7 +14,6 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarGroup,
-  SidebarGroupLabel,
 } from '@/components/ui/sidebar';
 import {
   Select,
@@ -30,19 +30,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { MaterialCard } from './material-card';
-import type { Material } from '@/types';
+import type { Material, SocialLink } from '@/types';
 import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter } from 'lucide-react';
 
-const mockMaterials: Material[] = [
-  { id: '1', title: 'Intro to Programming', course: 'ICP1521', faculty: 'ICT', program: 'Software Dev', year: 1, semester: 1, type: 'Document', url: '#' },
-  { id: '2', title: 'Calculus I Notes', course: 'MTH1521', faculty: 'Engineering', program: 'Elec Eng', year: 1, semester: 1, type: 'Document', url: '#' },
-  { id: '3', title: 'Networking Basics', course: 'CNF2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 1, type: 'Slides', url: '#' },
-  { id: '4', title: 'Web Development Intro', course: 'WDP2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 2, type: 'Video', url: '#' },
-  { id: '5', title: 'Advanced Databases', course: 'ADB3521', faculty: 'ICT', program: 'Software Dev', year: 3, semester: 1, type: 'Slides', url: '#' },
-  { id: '6', title: 'Project Management', course: 'PJM3521', faculty: 'Management', program: 'Business Admin', year: 3, semester: 2, type: 'Document', url: '#' },
-  { id: '7', title: 'Applied Physics', course: 'PHY1521', faculty: 'Engineering', program: 'Mech Eng', year: 1, semester: 2, type: 'Video', url: '#' },
-  { id: '8', title: 'Communication Skills', course: 'CSK1521', faculty: 'Humanities', program: 'Public Relations', year: 1, semester: 1, type: 'Slides', url: '#' },
-];
 
 const FilterSelect = ({ label, placeholder, options, value, onChange }: { label: string, placeholder: string, options: string[], value: string, onChange: (value: string) => void }) => (
     <div className="grid gap-2">
@@ -59,8 +49,24 @@ const FilterSelect = ({ label, placeholder, options, value, onChange }: { label:
     </div>
 );
 
+const defaultSocials: Record<SocialLink['id'], string> = {
+    facebook: '#',
+    twitter: '#',
+    linkedin: '#',
+};
+
+const defaultMaterials: Material[] = [
+  { id: '1', title: 'Intro to Programming', course: 'ICP1521', faculty: 'ICT', program: 'Software Dev', year: 1, semester: 1, type: 'Document', url: '#' },
+  { id: '2', title: 'Calculus I Notes', course: 'MTH1521', faculty: 'Engineering', program: 'Elec Eng', year: 1, semester: 1, type: 'Document', url: '#' },
+  { id: '3', title: 'Networking Basics', course: 'CNF2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 1, type: 'Slides', url: '#' },
+  { id: '4', title: 'Web Development Intro', course: 'WDP2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 2, type: 'Video', url: '#' },
+];
+
 export function CourseCampusApp() {
   const { toast } = useToast();
+  const [materials, setMaterials] = React.useState<Material[]>([]);
+  const [socialLinks, setSocialLinks] = React.useState(defaultSocials);
+  const [feedbackText, setFeedbackText] = React.useState('');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filters, setFilters] = React.useState({
     faculty: 'all',
@@ -70,11 +76,23 @@ export function CourseCampusApp() {
     type: 'all',
   });
 
+  React.useEffect(() => {
+    const storedMaterials = JSON.parse(localStorage.getItem('materials') || 'null');
+    setMaterials(storedMaterials || defaultMaterials);
+
+    const storedSocials = JSON.parse(localStorage.getItem('social-links') || 'null');
+     if (storedSocials) {
+        const links: Record<string, string> = {...defaultSocials};
+        storedSocials.forEach((l: SocialLink) => links[l.id] = l.url);
+        setSocialLinks(links as Record<SocialLink['id'], string>);
+    }
+  }, []);
+
   const handleFilterChange = (filterName: keyof typeof filters) => (value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
   
-  const filteredMaterials = mockMaterials.filter(material => {
+  const filteredMaterials = materials.filter(material => {
     return (
       (material.title.toLowerCase().includes(searchTerm.toLowerCase()) || material.course.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (filters.faculty === 'all' || material.faculty === filters.faculty) &&
@@ -84,12 +102,29 @@ export function CourseCampusApp() {
       (filters.type === 'all' || material.type === filters.type)
     );
   });
+  
+  const handleFeedbackSubmit = () => {
+    if (!feedbackText.trim()) {
+        toast({ variant: "destructive", title: "Empty Feedback", description: "Please enter your feedback before submitting." });
+        return;
+    }
+    const existingFeedback = JSON.parse(localStorage.getItem('user-feedback') || '[]');
+    const newFeedback = {
+        id: new Date().toISOString(),
+        text: feedbackText,
+        createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem('user-feedback', JSON.stringify([newFeedback, ...existingFeedback]));
+    setFeedbackText('');
+    toast({ title: "Feedback Submitted!", description: "Thank you for your valuable feedback." });
+  };
 
-  const faculties = [...new Set(mockMaterials.map(m => m.faculty))];
-  const programs = [...new Set(mockMaterials.map(m => m.program))];
-  const years = [...new Set(mockMaterials.map(m => m.year.toString()))];
-  const semesters = [...new Set(mockMaterials.map(m => m.semester.toString()))];
-  const types = [...new Set(mockMaterials.map(m => m.type))];
+
+  const faculties = [...new Set(materials.map(m => m.faculty))];
+  const programs = [...new Set(materials.map(m => m.program))];
+  const years = [...new Set(materials.map(m => m.year.toString()))];
+  const semesters = [...new Set(materials.map(m => m.semester.toString()))];
+  const types = [...new Set(materials.map(m => m.type))];
 
   return (
     <SidebarProvider>
@@ -142,10 +177,10 @@ export function CourseCampusApp() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <Textarea placeholder="Type your feedback here." rows={6} />
+                        <Textarea placeholder="Type your feedback here." rows={6} value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => toast({ title: "Feedback Submitted!", description: "Thank you for your valuable feedback." })}>Submit</Button>
+                        <Button onClick={handleFeedbackSubmit}>Submit</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -180,9 +215,9 @@ export function CourseCampusApp() {
           </SidebarMenu>
           <Separator className="my-2 bg-sidebar-border" />
           <div className="flex items-center justify-center gap-4 p-4 group-data-[collapsible=icon]:hidden">
-                <a href="#" target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Facebook className="h-5 w-5" /></a>
-                <a href="#" target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Twitter className="h-5 w-5" /></a>
-                <a href="#" target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Linkedin className="h-5 w-5" /></a>
+                <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Facebook className="h-5 w-5" /></a>
+                <a href={socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Twitter className="h-5 w-5" /></a>
+                <a href={socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Linkedin className="h-5 w-5" /></a>
           </div>
         </SidebarFooter>
       </Sidebar>
