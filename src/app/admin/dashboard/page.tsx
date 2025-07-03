@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,7 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport } from '@/services/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
 const materialSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -39,6 +39,13 @@ type MaterialFormValues = z.infer<typeof materialSchema>;
 
 const faculties: Material['faculty'][] = ['Engineering', 'Humanities', 'Management Sciences', 'ICT', 'Economics & Finance'];
 const materialTypes: Material['type'][] = ['Lecture Slides', 'Past Papers', 'Memos', 'Tutorials', 'Lab Manuals'];
+
+const chartConfig = {
+  downloads: {
+    label: "Downloads",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig;
 
 const LoadingSkeleton = () => (
     <div className="space-y-4">
@@ -194,16 +201,30 @@ export default function AdminDashboardPage() {
                                 <CardTitle>Material Downloads by Faculty</CardTitle>
                             </CardHeader>
                             <CardContent className="h-[20rem]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={analyticsData}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
-                                        <YAxis />
-                                        <Tooltip content={<ChartTooltipContent />} />
-                                        <Legend />
-                                        <Bar dataKey="downloads" name="Downloads by Faculty" fill="var(--color-primary)" />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                                <ChartContainer config={chartConfig} className="w-full h-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart accessibilityLayer data={analyticsData}>
+                                            <CartesianGrid vertical={false} />
+                                            <XAxis
+                                                dataKey="name"
+                                                tickLine={false}
+                                                tickMargin={10}
+                                                axisLine={false}
+                                                angle={-45} 
+                                                textAnchor="end" 
+                                                height={80} 
+                                                interval={0}
+                                            />
+                                            <YAxis />
+                                            <ChartTooltip
+                                                cursor={false}
+                                                content={<ChartTooltipContent indicator="dot" />}
+                                            />
+                                            <Legend />
+                                            <Bar dataKey="downloads" fill="var(--color-downloads)" radius={4} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </ChartContainer>
                             </CardContent>
                         </Card>
                     )}
