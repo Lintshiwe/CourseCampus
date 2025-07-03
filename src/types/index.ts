@@ -14,7 +14,7 @@ export type Material = {
 export type Feedback = {
   id: string;
   text: string;
-  createdAt: string; // Using ISO string for easier serialization
+  createdAt: Date;
 };
 
 export type SocialLink = {

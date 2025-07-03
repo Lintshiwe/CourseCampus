@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -10,74 +9,94 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, SocialLink } from '@/types';
-import { FilePenLine, PlusCircle, Trash2, Facebook, Twitter, Linkedin } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { getMaterials, deleteMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks } from '@/services/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Initial data for demonstration if localStorage is empty
-const initialMaterials: Material[] = [
-  { id: '1', title: 'Intro to Programming', course: 'ICP1521', faculty: 'ICT', program: 'Software Dev', year: 1, semester: 1, type: 'Document', url: 'https://example.com/doc1.pdf' },
-  { id: '2', title: 'Calculus I Notes', course: 'MTH1521', faculty: 'Engineering', program: 'Elec Eng', year: 1, semester: 1, type: 'Document', url: 'https://example.com/doc2.pdf' },
-  { id: '3', title: 'Networking Basics', course: 'CNF2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 1, type: 'Slides', url: 'https://example.com/slides1.ppt' },
-];
-const initialFeedback: Feedback[] = [
-    { id: '1', text: 'This app is great! Very helpful for finding materials.', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
-    { id: '2', text: 'Could you add materials for the Economics department?', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-];
-const initialSocialLinks: SocialLink[] = [
-    { id: 'facebook', name: 'Facebook', url: 'https://facebook.com' },
-    { id: 'twitter', name: 'Twitter', url: 'https://twitter.com' },
-    { id: 'linkedin', name: 'LinkedIn', url: 'https://linkedin.com' },
-];
 
+const LoadingSkeleton = () => (
+    <div className="space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+    </div>
+)
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
   const [materials, setMaterials] = React.useState<Material[]>([]);
   const [feedback, setFeedback] = React.useState<Feedback[]>([]);
   const [socialLinks, setSocialLinks] = React.useState<SocialLink[]>([]);
-  const [isClient, setIsClient] = React.useState(false);
+  const [loading, setLoading] = React.useState({ materials: true, feedback: true, social: true });
+  const [isSaving, setIsSaving] = React.useState(false);
+
 
   React.useEffect(() => {
-    setIsClient(true);
-    const storedMaterials = JSON.parse(localStorage.getItem('materials') || 'null');
-    setMaterials(storedMaterials || initialMaterials);
-    if (!storedMaterials) {
-        localStorage.setItem('materials', JSON.stringify(initialMaterials));
-    }
+    const fetchData = async () => {
+        setLoading(prev => ({ ...prev, materials: true }));
+        const materialsData = await getMaterials();
+        setMaterials(materialsData);
+        setLoading(prev => ({ ...prev, materials: false }));
 
-    const storedFeedback = JSON.parse(localStorage.getItem('user-feedback') || 'null');
-    setFeedback(storedFeedback || initialFeedback);
+        setLoading(prev => ({ ...prev, feedback: true }));
+        const feedbackData = await getFeedback();
+        setFeedback(feedbackData);
+        setLoading(prev => ({ ...prev, feedback: false }));
 
-    const storedSocialLinks = JSON.parse(localStorage.getItem('social-links') || 'null');
-    setSocialLinks(storedSocialLinks || initialSocialLinks);
+        setLoading(prev => ({ ...prev, social: true }));
+        const socialLinksData = await getSocialLinks();
+        // Ensure default structure if Firestore is empty
+        const defaultLinks: SocialLink[] = [
+            { id: 'facebook', name: 'Facebook', url: '' },
+            { id: 'twitter', name: 'Twitter', url: '' },
+            { id: 'linkedin', name: 'LinkedIn', url: '' },
+        ];
+        const mergedLinks = defaultLinks.map(defaultLink => {
+            const found = socialLinksData.find(dbLink => dbLink.id === defaultLink.id);
+            return found ? { ...defaultLink, ...found } : defaultLink;
+        });
+        setSocialLinks(mergedLinks);
+        setLoading(prev => ({ ...prev, social: false }));
+    };
+    fetchData();
   }, []);
 
-  const saveSocialLinks = () => {
-      localStorage.setItem('social-links', JSON.stringify(socialLinks));
-      toast({ title: 'Success', description: 'Social links updated successfully.' });
+  const saveSocialLinks = async () => {
+      setIsSaving(true);
+      try {
+        await updateSocialLinks(socialLinks);
+        toast({ title: 'Success', description: 'Social links updated successfully.' });
+      } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to update social links.' });
+      } finally {
+        setIsSaving(false);
+      }
   }
 
   const handleSocialLinkChange = (id: SocialLink['id'], url: string) => {
       setSocialLinks(prev => prev.map(link => link.id === id ? { ...link, url } : link));
   };
   
-  const deleteFeedback = (id: string) => {
-      const updatedFeedback = feedback.filter(fb => fb.id !== id);
-      setFeedback(updatedFeedback);
-      localStorage.setItem('user-feedback', JSON.stringify(updatedFeedback));
-      toast({ title: 'Feedback Deleted', description: 'The feedback item has been removed.' });
+  const handleDeleteFeedback = async (id: string) => {
+      try {
+          await deleteFeedback(id);
+          setFeedback(prev => prev.filter(fb => fb.id !== id));
+          toast({ title: 'Feedback Deleted', description: 'The feedback item has been removed.' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete feedback.' });
+      }
   }
   
-  const deleteMaterial = (id: string) => {
-      const updatedMaterials = materials.filter(m => m.id !== id);
-      setMaterials(updatedMaterials);
-      localStorage.setItem('materials', JSON.stringify(updatedMaterials));
-      toast({ title: 'Material Deleted' });
-  }
-
-  if (!isClient) {
-      return null;
+  const handleDeleteMaterial = async (id: string) => {
+      try {
+          await deleteMaterial(id);
+          setMaterials(prev => prev.filter(m => m.id !== id));
+          toast({ title: 'Material Deleted' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete material.' });
+      }
   }
 
   return (
@@ -96,42 +115,44 @@ export default function AdminDashboardPage() {
               <CardDescription>Manage the course materials available in the app.</CardDescription>
             </CardHeader>
             <CardContent>
-               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="hidden md:table-cell">Course</TableHead>
-                    <TableHead className="hidden lg:table-cell">Faculty</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {materials.map((material) => (
-                    <TableRow key={material.id}>
-                      <TableCell className="font-medium">{material.title}</TableCell>
-                      <TableCell className="hidden md:table-cell">{material.course}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{material.faculty}</TableCell>
-                      <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" disabled><FilePenLine className="h-4 w-4" /></Button>
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => deleteMaterial(material.id)}>Delete</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                {loading.materials ? <LoadingSkeleton /> : (
+                   <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead className="hidden md:table-cell">Course</TableHead>
+                        <TableHead className="hidden lg:table-cell">Faculty</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {materials.map((material) => (
+                        <TableRow key={material.id}>
+                          <TableCell className="font-medium">{material.title}</TableCell>
+                          <TableCell className="hidden md:table-cell">{material.course}</TableCell>
+                          <TableCell className="hidden lg:table-cell">{material.faculty}</TableCell>
+                          <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" disabled><FilePenLine className="h-4 w-4" /></Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteMaterial(material.id)}>Delete</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
             </CardContent>
             <CardFooter className="border-t pt-6">
                 <p className="text-sm text-muted-foreground">Add and Edit functionality coming soon.</p>
@@ -146,12 +167,12 @@ export default function AdminDashboardPage() {
               <CardDescription>Here's what users are saying about the platform.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {feedback.length > 0 ? feedback.map(fb => (
+              {loading.feedback ? <LoadingSkeleton /> : feedback.length > 0 ? feedback.map(fb => (
                 <Card key={fb.id}>
                   <CardContent className="p-4 flex justify-between items-start">
                     <div>
                       <p className="text-sm">{fb.text}</p>
-                      <p className="text-xs text-muted-foreground mt-2">{new Date(fb.createdAt).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-2">{fb.createdAt.toLocaleString()}</p>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -161,7 +182,7 @@ export default function AdminDashboardPage() {
                         <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action will permanently delete the feedback.</AlertDialogDescription></AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteFeedback(fb.id)}>Delete</AlertDialogAction>
+                          <AlertDialogAction onClick={() => handleDeleteFeedback(fb.id)}>Delete</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -181,7 +202,7 @@ export default function AdminDashboardPage() {
               <CardDescription>Manage the social media links displayed in the app footer.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {socialLinks.map(link => (
+              {loading.social ? <LoadingSkeleton /> : socialLinks.map(link => (
                 <div key={link.id} className="flex items-center gap-4">
                   <Label htmlFor={link.id} className="w-24 flex items-center gap-2 capitalize">
                     {link.id === 'facebook' && <Facebook />}
@@ -194,7 +215,10 @@ export default function AdminDashboardPage() {
               ))}
             </CardContent>
             <CardFooter className="flex justify-end">
-                <Button onClick={saveSocialLinks}>Save Changes</Button>
+                <Button onClick={saveSocialLinks} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                </Button>
             </CardFooter>
           </Card>
         </TabsContent>

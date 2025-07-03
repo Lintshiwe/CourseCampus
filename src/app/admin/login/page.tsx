@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -9,55 +8,56 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [email, setEmail] = React.useState('admin@coursecampus.com');
-  const [password, setPassword] = React.useState('password123');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    // If user is already logged in, redirect to dashboard
-    if (localStorage.getItem('admin-auth') === 'true') {
-        router.replace('/admin/dashboard');
-    }
-  }, [router]);
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
-      if (email === 'admin@coursecampus.com' && password === 'password123') {
-        try {
-            localStorage.setItem('admin-auth', 'true');
-            toast({ title: "Login Successful", description: "Welcome back, Admin!" });
-            router.push('/admin/dashboard');
-        } catch (error) {
-            console.error("Could not set item in localStorage", error);
-            toast({
-                variant: 'destructive',
-                title: 'Login Failed',
-                description: 'Could not sign you in. Please enable cookies/storage.',
-            });
-        }
-      } else {
+    if (!email || !password) {
         toast({
-          variant: 'destructive',
-          title: 'Login Failed',
-          description: 'Invalid email or password.',
+            variant: 'destructive',
+            title: 'Login Failed',
+            description: 'Please enter both email and password.',
         });
+        setIsLoading(false);
+        return;
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: "Login Successful", description: "Redirecting to dashboard..." });
+      // The layout's auth listener will handle the redirect.
+      router.push('/admin/dashboard');
+    } catch (error: any) {
+      console.error("Firebase login error:", error);
+      let description = 'An unknown error occurred.';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        description = 'Invalid email or password.';
       }
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description,
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 sm:p-6 md:p-8">
       <div className="flex items-center gap-2 mb-8">
         <ShieldCheck className="w-10 h-10 text-primary" />
-        <h1 className="font-headline text-3xl font-bold">Admin Panel</h1>
+        <h1 className="font-headline text-3xl font-bold text-center">Admin Panel</h1>
       </div>
       <Card className="w-full max-w-sm">
         <CardHeader>
@@ -71,11 +71,12 @@ export default function AdminLoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@coursecampus.com"
+                placeholder="admin@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
+                autoComplete="email"
               />
             </div>
             <div className="grid gap-2">
@@ -87,6 +88,7 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
+                autoComplete="current-password"
               />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -31,8 +30,9 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { MaterialCard } from './material-card';
 import type { Material, SocialLink } from '@/types';
-import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter } from 'lucide-react';
-
+import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2 } from 'lucide-react';
+import { getMaterials, addFeedback, getSocialLinks } from '@/services/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const FilterSelect = ({ label, placeholder, options, value, onChange }: { label: string, placeholder: string, options: string[], value: string, onChange: (value: string) => void }) => (
     <div className="grid gap-2">
@@ -49,25 +49,14 @@ const FilterSelect = ({ label, placeholder, options, value, onChange }: { label:
     </div>
 );
 
-const defaultSocials: Record<SocialLink['id'], string> = {
-    facebook: '#',
-    twitter: '#',
-    linkedin: '#',
-};
-
-const defaultMaterials: Material[] = [
-  { id: '1', title: 'Intro to Programming', course: 'ICP1521', faculty: 'ICT', program: 'Software Dev', year: 1, semester: 1, type: 'Document', url: '#' },
-  { id: '2', title: 'Calculus I Notes', course: 'MTH1521', faculty: 'Engineering', program: 'Elec Eng', year: 1, semester: 1, type: 'Document', url: '#' },
-  { id: '3', title: 'Networking Basics', course: 'CNF2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 1, type: 'Slides', url: '#' },
-  { id: '4', title: 'Web Development Intro', course: 'WDP2521', faculty: 'ICT', program: 'Software Dev', year: 2, semester: 2, type: 'Video', url: '#' },
-];
-
 export function CourseCampusApp() {
   const { toast } = useToast();
   const [materials, setMaterials] = React.useState<Material[]>([]);
-  const [socialLinks, setSocialLinks] = React.useState(defaultSocials);
+  const [socialLinks, setSocialLinks] = React.useState<Record<SocialLink['id'], string>>({ facebook: '#', twitter: '#', linkedin: '#' });
   const [feedbackText, setFeedbackText] = React.useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
   const [filters, setFilters] = React.useState({
     faculty: 'all',
     program: 'all',
@@ -77,15 +66,24 @@ export function CourseCampusApp() {
   });
 
   React.useEffect(() => {
-    const storedMaterials = JSON.parse(localStorage.getItem('materials') || 'null');
-    setMaterials(storedMaterials || defaultMaterials);
-
-    const storedSocials = JSON.parse(localStorage.getItem('social-links') || 'null');
-     if (storedSocials) {
-        const links: Record<string, string> = {...defaultSocials};
-        storedSocials.forEach((l: SocialLink) => links[l.id] = l.url);
-        setSocialLinks(links as Record<SocialLink['id'], string>);
-    }
+    const fetchData = async () => {
+        setLoading(true);
+        const [materialsData, socialLinksData] = await Promise.all([getMaterials(), getSocialLinks()]);
+        
+        setMaterials(materialsData);
+        
+        if (socialLinksData.length > 0) {
+            const links: Record<string, string> = { facebook: '#', twitter: '#', linkedin: '#' };
+            socialLinksData.forEach((l: SocialLink) => {
+                if (l.id in links) {
+                    links[l.id] = l.url;
+                }
+            });
+            setSocialLinks(links as Record<SocialLink['id'], string>);
+        }
+        setLoading(false);
+    };
+    fetchData();
   }, []);
 
   const handleFilterChange = (filterName: keyof typeof filters) => (value: string) => {
@@ -103,22 +101,22 @@ export function CourseCampusApp() {
     );
   });
   
-  const handleFeedbackSubmit = () => {
+  const handleFeedbackSubmit = async () => {
     if (!feedbackText.trim()) {
         toast({ variant: "destructive", title: "Empty Feedback", description: "Please enter your feedback before submitting." });
         return;
     }
-    const existingFeedback = JSON.parse(localStorage.getItem('user-feedback') || '[]');
-    const newFeedback = {
-        id: new Date().toISOString(),
-        text: feedbackText,
-        createdAt: new Date().toISOString(),
-    };
-    localStorage.setItem('user-feedback', JSON.stringify([newFeedback, ...existingFeedback]));
-    setFeedbackText('');
-    toast({ title: "Feedback Submitted!", description: "Thank you for your valuable feedback." });
+    setIsSubmittingFeedback(true);
+    try {
+        await addFeedback(feedbackText);
+        setFeedbackText('');
+        toast({ title: "Feedback Submitted!", description: "Thank you for your valuable feedback." });
+    } catch (error) {
+        toast({ variant: "destructive", title: "Submission Failed", description: "Could not submit your feedback. Please try again." });
+    } finally {
+        setIsSubmittingFeedback(false);
+    }
   };
-
 
   const faculties = [...new Set(materials.map(m => m.faculty))];
   const programs = [...new Set(materials.map(m => m.program))];
@@ -149,11 +147,21 @@ export function CourseCampusApp() {
             </SidebarGroup>
             <SidebarGroup className="p-2 pt-0">
                 <div className="grid gap-4">
-                    <FilterSelect label="Faculty" placeholder="All Faculties" options={faculties} value={filters.faculty} onChange={handleFilterChange('faculty')} />
-                    <FilterSelect label="Program" placeholder="All Programs" options={programs} value={filters.program} onChange={handleFilterChange('program')} />
-                    <FilterSelect label="Academic Year" placeholder="All Years" options={years} value={filters.year} onChange={handleFilterChange('year')} />
-                    <FilterSelect label="Semester" placeholder="All Semesters" options={semesters} value={filters.semester} onChange={handleFilterChange('semester')} />
-                    <FilterSelect label="Material Type" placeholder="All Types" options={types} value={filters.type} onChange={handleFilterChange('type')} />
+                    {loading ? (
+                      <>
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </>
+                    ) : (
+                      <>
+                        <FilterSelect label="Faculty" placeholder="All Faculties" options={faculties} value={filters.faculty} onChange={handleFilterChange('faculty')} />
+                        <FilterSelect label="Program" placeholder="All Programs" options={programs} value={filters.program} onChange={handleFilterChange('program')} />
+                        <FilterSelect label="Academic Year" placeholder="All Years" options={years} value={filters.year} onChange={handleFilterChange('year')} />
+                        <FilterSelect label="Semester" placeholder="All Semesters" options={semesters} value={filters.semester} onChange={handleFilterChange('semester')} />
+                        <FilterSelect label="Material Type" placeholder="All Types" options={types} value={filters.type} onChange={handleFilterChange('type')} />
+                      </>
+                    )}
                 </div>
             </SidebarGroup>
         </SidebarContent>
@@ -180,7 +188,10 @@ export function CourseCampusApp() {
                         <Textarea placeholder="Type your feedback here." rows={6} value={feedbackText} onChange={e => setFeedbackText(e.target.value)} />
                     </div>
                     <DialogFooter>
-                        <Button onClick={handleFeedbackSubmit}>Submit</Button>
+                        <Button onClick={handleFeedbackSubmit} disabled={isSubmittingFeedback}>
+                            {isSubmittingFeedback && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -212,6 +223,12 @@ export function CourseCampusApp() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <SidebarMenuItem>
+                <SidebarMenuButton href="/admin/login" tooltip="Admin Login">
+                    <Shield />
+                    <span>Admin</span>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
           <Separator className="my-2 bg-sidebar-border" />
           <div className="flex items-center justify-center gap-4 p-4 group-data-[collapsible=icon]:hidden">
@@ -229,7 +246,11 @@ export function CourseCampusApp() {
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {filteredMaterials.length > 0 ? (
+            {loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+                </div>
+            ) : filteredMaterials.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredMaterials.map(material => (
                         <MaterialCard key={material.id} material={material} />
@@ -239,7 +260,7 @@ export function CourseCampusApp() {
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-20">
                     <Search className="w-16 h-16 mb-4" />
                     <h3 className="text-xl font-headline font-semibold">No Materials Found</h3>
-                    <p className="max-w-md mt-2">Try adjusting your search or filter criteria to find what you're looking for.</p>
+                    <p className="max-w-md mt-2">Your search and filter criteria did not match any materials. Please try again.</p>
                 </div>
             )}
         </main>
