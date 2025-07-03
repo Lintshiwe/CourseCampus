@@ -15,7 +15,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { LogOut, ShieldCheck, LayoutDashboard } from 'lucide-react';
+import { LogOut, ShieldCheck, LayoutDashboard, Home } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -92,6 +92,12 @@ export default function AdminLayout({
             </SidebarHeader>
             <SidebarContent>
                 <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton href="/" tooltip="Client Site">
+                            <Home />
+                            <span>Home</span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton href="/admin/dashboard" tooltip="Dashboard" isActive={pathname.startsWith('/admin/dashboard')}>
                             <LayoutDashboard />
