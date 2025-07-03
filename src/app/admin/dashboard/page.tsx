@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport } from '@/services/firestore';
+import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
@@ -32,7 +34,7 @@ const materialSchema = z.object({
     year: z.coerce.number().min(1, "Year is required"),
     semester: z.coerce.number().min(1, "Semester is required"),
     type: z.enum(['Lecture Slides', 'Past Papers', 'Memos', 'Tutorials', 'Lab Manuals']),
-    url: z.string().url("Must be a valid URL for the material."),
+    file: z.any().optional(),
 });
 
 type MaterialFormValues = z.infer<typeof materialSchema>;
@@ -69,7 +71,7 @@ export default function AdminDashboardPage() {
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
-    defaultValues: { title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', url: '' },
+    defaultValues: { title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', file: undefined },
   });
 
   const fetchAllData = React.useCallback(async () => {
@@ -99,9 +101,9 @@ export default function AdminDashboardPage() {
   React.useEffect(() => {
     if (isFormOpen) {
       if (editingMaterial) {
-        form.reset(editingMaterial);
+        form.reset({...editingMaterial, file: undefined });
       } else {
-        form.reset({ title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', url: '' });
+        form.reset({ title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', file: undefined });
       }
     }
   }, [editingMaterial, isFormOpen, form]);
@@ -110,18 +112,48 @@ export default function AdminDashboardPage() {
   const handleMaterialSubmit = async (values: MaterialFormValues) => {
     setIsSaving(true);
     try {
-        const dataToSave = { ...values };
+        const file = values.file?.[0];
+        let downloadURL = editingMaterial?.url || '';
+
+        if (file) {
+            const storageRef = ref(storage, `materials/${Date.now()}_${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            downloadURL = await getDownloadURL(snapshot.ref);
+        }
+
+        if (!editingMaterial && !downloadURL) {
+            toast({ variant: 'destructive', title: 'Error', description: "A file is required to add new material." });
+            setIsSaving(false);
+            return;
+        }
+
+        const { file: _file, ...dataToSave } = values;
+        const finalData = { ...dataToSave, url: downloadURL };
+        
+        const materialDataForDb: Omit<Material, 'id' | 'uploadDate' | 'downloads'> = {
+            title: finalData.title,
+            course: finalData.course,
+            faculty: finalData.faculty,
+            program: finalData.program,
+            year: finalData.year,
+            semester: finalData.semester,
+            type: finalData.type,
+            url: finalData.url,
+            lecturer: finalData.lecturer,
+        };
+
         if (editingMaterial) {
-            await updateMaterial(editingMaterial.id, dataToSave);
+            await updateMaterial(editingMaterial.id, materialDataForDb);
             toast({ title: "Success", description: "Material updated successfully." });
         } else {
-            await addMaterial(dataToSave);
+            await addMaterial(materialDataForDb);
             toast({ title: "Success", description: "New material added successfully." });
         }
         setIsFormOpen(false);
         setEditingMaterial(null);
-        fetchAllData(); // Refetch all data to keep things in sync
+        fetchAllData();
     } catch (error) {
+        console.error("Error saving material:", error);
         toast({ variant: 'destructive', title: 'Error', description: "Failed to save material. Please try again." });
     } finally {
         setIsSaving(false);
@@ -196,7 +228,7 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                     {loading.materials ? <LoadingSkeleton /> : (
-                        <Card>
+                         <Card>
                             <CardHeader>
                                 <CardTitle>Material Downloads by Faculty</CardTitle>
                             </CardHeader>
@@ -273,7 +305,27 @@ export default function AdminDashboardPage() {
       </Tabs>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>{editingMaterial ? 'Edit Material' : 'Add New Material'}</DialogTitle></DialogHeader>
-          <Form {...form}><form onSubmit={form.handleSubmit(handleMaterialSubmit)} className="space-y-4"><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Title / Subject</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="course" render={({ field }) => (<FormItem><FormLabel>Course Code</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="faculty" render={({ field }) => (<FormItem><FormLabel>Faculty</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a faculty" /></SelectTrigger></FormControl><SelectContent>{faculties.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={form.control} name="program" render={({ field }) => (<FormItem><FormLabel>Program</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="lecturer" render={({ field }) => (<FormItem><FormLabel>Lecturer</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="type" render={({ field }) => (<FormItem><FormLabel>Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent>{materialTypes.map(t=><SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="year" render={({ field }) => (<FormItem><FormLabel>Year</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="semester" render={({ field }) => (<FormItem><FormLabel>Semester</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} /></div><FormField control={form.control} name="url" render={({ field }) => (<FormItem><FormLabel>Download URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingMaterial ? 'Save Changes' : 'Add Material'}</Button></DialogFooter></form></Form>
+          <Form {...form}><form onSubmit={form.handleSubmit(handleMaterialSubmit)} className="space-y-4"><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="title" render={({ field }) => (<FormItem><FormLabel>Title / Subject</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="course" render={({ field }) => (<FormItem><FormLabel>Course Code</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="faculty" render={({ field }) => (<FormItem><FormLabel>Faculty</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a faculty" /></SelectTrigger></FormControl><SelectContent>{faculties.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={form.control} name="program" render={({ field }) => (<FormItem><FormLabel>Program</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="lecturer" render={({ field }) => (<FormItem><FormLabel>Lecturer</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="type" render={({ field }) => (<FormItem><FormLabel>Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent>{materialTypes.map(t=><SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} /></div><div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="year" render={({ field }) => (<FormItem><FormLabel>Year</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>)} /><FormField control={form.control} name="semester" render={({ field }) => (<FormItem><FormLabel>Semester</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>)} /></div>
+          <FormField
+            control={form.control}
+            name="file"
+            render={({ field: { onChange, value, ...rest } }) => (
+              <FormItem>
+                <FormLabel>Material File {editingMaterial && "(Optional: leave blank to keep existing file)"}</FormLabel>
+                <FormControl>
+                    <Input 
+                        type="file" 
+                        onChange={(e) => {
+                           onChange(e.target.files);
+                        }}
+                         {...rest}
+                    />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button type="submit" disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingMaterial ? 'Save Changes' : 'Add Material'}</Button></DialogFooter></form></Form>
       </DialogContent></Dialog>
     </div>
   );

@@ -167,10 +167,6 @@ export function CourseCampusApp() {
                     <DialogHeader><DialogTitle>Report a Bug</DialogTitle><DialogDescription>Spotted an issue? Help us improve by reporting it.</DialogDescription></DialogHeader>
                     <div className="grid gap-4 py-4">
                         <Textarea placeholder="Describe the bug you encountered..." rows={4} value={bugText} onChange={(e) => setBugText(e.target.value)} />
-                        <div className="grid w-full max-w-sm items-center gap-1.5">
-                            <Label htmlFor="screenshot">Screenshot (Optional)</Label>
-                            <Input id="screenshot" type="file" className="text-foreground" disabled/>
-                        </div>
                     </div>
                     <DialogFooter><Button onClick={handleBugReportSubmit} disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Report Bug</Button></DialogFooter>
                 </DialogContent>
