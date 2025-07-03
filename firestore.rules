@@ -1,0 +1,23 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public can read materials, but only admins can create, update, or delete them.
+    match /materials/{materialId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Public can read social links, but only admins can update them.
+    match /social-links/{linkId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Anyone can create (submit) feedback. Only admins can read or delete it.
+    match /feedback/{feedbackId} {
+      allow create: if true;
+      allow read, delete: if request.auth != null;
+    }
+  }
+}
