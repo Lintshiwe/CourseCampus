@@ -1,11 +1,12 @@
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink } from '@/types';
 
 // Generic function to fetch a collection
 async function getCollection<T>(collectionName: string): Promise<T[]> {
     try {
-        const querySnapshot = await getDocs(query(collection(db, collectionName)));
+        const q = query(collection(db, collectionName));
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
     } catch (error) {
         console.error(`Error fetching ${collectionName}:`, error);
@@ -15,6 +16,13 @@ async function getCollection<T>(collectionName: string): Promise<T[]> {
 
 // Materials
 export const getMaterials = () => getCollection<Material>('materials');
+export const addMaterial = (materialData: Omit<Material, 'id'>) => {
+    return addDoc(collection(db, 'materials'), materialData);
+};
+export const updateMaterial = (id: string, materialData: Partial<Omit<Material, 'id'>>) => {
+    const materialRef = doc(db, 'materials', id);
+    return updateDoc(materialRef, materialData);
+};
 export const deleteMaterial = (id: string) => deleteDoc(doc(db, 'materials', id));
 
 // Feedback
