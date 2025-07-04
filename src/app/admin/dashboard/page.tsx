@@ -2,22 +2,22 @@
 "use client";
 
 import * as React from 'react';
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, Sync, Eye, EyeOff } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -351,7 +351,7 @@ export default function AdminDashboardPage() {
                             {selectedMaterials.length > 0 && <span className="text-muted-foreground ml-2">({selectedMaterials.length} selected)</span>}
                          </h3>
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={handleSyncWithSemester}><Sync className="mr-2 h-4 w-4" /> Sync with Semester</Button>
+                            <Button variant="outline" size="sm" onClick={handleSyncWithSemester}><RefreshCw className="mr-2 h-4 w-4" /> Sync with Semester</Button>
                             <Button variant="outline" size="sm" disabled={selectedMaterials.length === 0} onClick={() => handleBatchUpdateAccessibility(true)}><Eye className="mr-2 h-4 w-4" /> Make Visible</Button>
                             <Button variant="outline" size="sm" disabled={selectedMaterials.length === 0} onClick={() => handleBatchUpdateAccessibility(false)}><EyeOff className="mr-2 h-4 w-4" /> Make Hidden</Button>
                             <AlertDialog>
