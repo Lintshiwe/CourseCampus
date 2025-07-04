@@ -30,7 +30,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const materialSchema = z.object({
-    title: z.string().min(1, "Title is required"),
+    title: z.string().optional(),
     course: z.string().min(1, "Course is required"),
     faculty: z.string().min(1, "Faculty is required"),
     program: z.string().min(1, "Program is required"),
@@ -130,30 +130,55 @@ export default function AdminDashboardPage() {
   const handleMaterialSubmit = async (values: MaterialFormValues) => {
     setIsSaving(true);
     try {
-        const file = values.file?.[0];
-        let downloadURL = editingMaterial?.url || '';
-
-        if (file) {
-            const storageRef = ref(storage, `materials/${Date.now()}_${file.name}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            downloadURL = await getDownloadURL(snapshot.ref);
-        }
-
-        if (!editingMaterial && !downloadURL) {
-            toast({ variant: 'destructive', title: 'Error', description: "A file is required to add new material." });
-            setIsSaving(false);
-            return;
-        }
-
-        const { file: _file, ...finalData } = values;
-        
         if (editingMaterial) {
+            // Handle editing a single material
+            if (!values.title) {
+                toast({ variant: 'destructive', title: 'Error', description: "Title is required when editing a material." });
+                setIsSaving(false);
+                return;
+            }
+
+            const file = values.file?.[0];
+            let downloadURL = editingMaterial.url;
+
+            if (file) {
+                const storageRef = ref(storage, `materials/${Date.now()}_${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                downloadURL = await getDownloadURL(snapshot.ref);
+            }
+
+            const { file: _file, ...finalData } = values;
+            
             await updateMaterial(editingMaterial.id, { ...finalData, url: downloadURL });
             toast({ title: "Success", description: "Material updated successfully." });
         } else {
-            await addMaterial({ ...finalData, url: downloadURL });
-            toast({ title: "Success", description: "New material added successfully." });
+            // Handle adding one or more new materials
+            const files = values.file;
+            if (!files || files.length === 0) {
+                toast({ variant: 'destructive', title: 'Error', description: "At least one file is required to add new material." });
+                setIsSaving(false);
+                return;
+            }
+
+            const { file: _file, title: formTitle, ...commonData } = values;
+
+            const uploadPromises = Array.from(files as FileList).map(async (file) => {
+                const storageRef = ref(storage, `materials/${Date.now()}_${file.name}`);
+                const snapshot = await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+
+                const title = (files.length === 1 && formTitle)
+                    ? formTitle
+                    : file.name.lastIndexOf('.') > -1 ? file.name.substring(0, file.name.lastIndexOf('.')) : file.name;
+
+                await addMaterial({ ...commonData, title, url: downloadURL });
+            });
+
+            await Promise.all(uploadPromises);
+
+            toast({ title: "Success", description: `${files.length} material(s) added successfully.` });
         }
+
         setIsFormOpen(false);
         setEditingMaterial(null);
         fetchAllData();
@@ -614,12 +639,14 @@ export default function AdminDashboardPage() {
                 <FormControl>
                     <Input 
                         type="file" 
+                        multiple={!editingMaterial}
                         onChange={(e) => {
                            onChange(e.target.files);
                         }}
                          {...rest}
                     />
                 </FormControl>
+                {!editingMaterial && <FormDescription>You can select multiple files. The filename will be used as the title if the title field is empty.</FormDescription>}
                 {editingMaterial && <FormDescription>Leave blank to keep the current file.</FormDescription>}
                 <FormMessage />
               </FormItem>
@@ -630,3 +657,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
