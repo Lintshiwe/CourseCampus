@@ -57,6 +57,16 @@ export const batchUpdateMaterialsAccessibility = async (updates: { id: string; i
 
 export const deleteMaterial = (id: string) => deleteDoc(doc(db, 'materials', id));
 
+export const batchDeleteMaterials = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const batch = writeBatch(db);
+    ids.forEach(id => {
+        const materialRef = doc(db, 'materials', id);
+        batch.delete(materialRef);
+    });
+    await batch.commit();
+};
+
 export const incrementMaterialDownload = (id: string) => {
     const materialRef = doc(db, 'materials', id);
     return updateDoc(materialRef, {

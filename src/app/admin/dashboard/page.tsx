@@ -15,18 +15,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users, Search, Eye, EyeOff, GitCompareArrows } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users, Search, Eye, EyeOff, GitCompareArrows, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats, getDailyVisits, batchUpdateMaterialsAccessibility } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats, getDailyVisits, batchUpdateMaterialsAccessibility, batchDeleteMaterials } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { getFileNameFromUrl } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const materialSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -79,6 +80,7 @@ export default function AdminDashboardPage() {
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
   const [adminSearchTerm, setAdminSearchTerm] = React.useState('');
   const [isBatchUpdating, setIsBatchUpdating] = React.useState(false);
+  const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
@@ -96,7 +98,6 @@ export default function AdminDashboardPage() {
         getDailyVisits(),
     ]);
     
-    materialsData.sort((a, b) => a.course.localeCompare(b.course));
     setMaterials(materialsData);
     setFeedback(feedbackData);
     setBugReports(bugReportsData);
@@ -108,6 +109,7 @@ export default function AdminDashboardPage() {
     setSocialLinks(mergedLinks);
     
     setLoading({ materials: false, feedback: false, bugs: false, social: false, stats: false, dailyVisits: false });
+    setSelectedMaterials(new Set());
   }, []);
 
   React.useEffect(() => {
@@ -250,6 +252,39 @@ export default function AdminDashboardPage() {
           setIsBatchUpdating(false);
       }
   };
+  
+  const handleUpdateSelectionAccessibility = async (isAccessible: boolean) => {
+      setIsBatchUpdating(true);
+      const ids = Array.from(selectedMaterials);
+      const updates = ids.map(id => ({ id, isAccessible }));
+      try {
+          await batchUpdateMaterialsAccessibility(updates);
+          setMaterials(prev => prev.map(m => ids.includes(m.id) ? { ...m, isAccessible } : m));
+          toast({ title: 'Success', description: `${ids.length} material(s) updated.` });
+          setSelectedMaterials(new Set());
+      } catch (error) {
+          console.error("Batch update error:", error);
+          toast({ variant: 'destructive', title: 'Error', description: 'Failed to update selected materials.' });
+      } finally {
+          setIsBatchUpdating(false);
+      }
+  };
+
+  const handleDeleteSelected = async () => {
+      setIsBatchUpdating(true);
+      const ids = Array.from(selectedMaterials);
+      try {
+          await batchDeleteMaterials(ids);
+          setMaterials(prev => prev.filter(m => !ids.includes(m.id)));
+          toast({ title: 'Success', description: `${ids.length} material(s) deleted.` });
+          setSelectedMaterials(new Set());
+      } catch (error) {
+          console.error("Batch delete error:", error);
+          toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete selected materials.' });
+      } finally {
+          setIsBatchUpdating(false);
+      }
+  };
 
 
   const analyticsData = React.useMemo(() => {
@@ -276,11 +311,33 @@ export default function AdminDashboardPage() {
         material.lecturer.toLowerCase().includes(lowercasedTerm)
     );
   }, [materials, adminSearchTerm]);
+  
+  const handleToggleSelect = (id: string) => {
+    setSelectedMaterials(prev => {
+        const newSelection = new Set(prev);
+        if (newSelection.has(id)) {
+            newSelection.delete(id);
+        } else {
+            newSelection.add(id);
+        }
+        return newSelection;
+    });
+  };
+
+  const handleToggleSelectAll = (checked: boolean | 'indeterminate') => {
+      if (checked) {
+          setSelectedMaterials(new Set(filteredAdminMaterials.map(m => m.id)));
+      } else {
+          setSelectedMaterials(new Set());
+      }
+  };
+
+  const isAllSelected = filteredAdminMaterials.length > 0 && selectedMaterials.size === filteredAdminMaterials.length && filteredAdminMaterials.every(m => selectedMaterials.has(m.id));
 
 
   return (
     <div className="container mx-auto py-4">
-      <Tabs defaultValue="analytics">
+      <Tabs defaultValue="materials">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="analytics"><BarChart2 className="mr-2 h-4 w-4" />Analytics</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
@@ -382,8 +439,47 @@ export default function AdminDashboardPage() {
                         onChange={(e) => setAdminSearchTerm(e.target.value)}
                     />
                 </div>
+                {selectedMaterials.size > 0 && (
+                  <div className="flex items-center gap-2 p-2 mt-4 bg-muted/50 rounded-lg border">
+                      <div className="flex-1 text-sm font-medium">
+                          {selectedMaterials.size} item(s) selected
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handleUpdateSelectionAccessibility(true)} disabled={isBatchUpdating}>
+                          <Eye className="mr-2 h-4 w-4"/> Make Visible
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleUpdateSelectionAccessibility(false)} disabled={isBatchUpdating}>
+                          <EyeOff className="mr-2 h-4 w-4"/> Make Hidden
+                      </Button>
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" disabled={isBatchUpdating}>
+                                  <Trash2 className="mr-2 h-4 w-4"/> Delete
+                              </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                              <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                      This action will permanently delete {selectedMaterials.size} selected material(s). This cannot be undone.
+                                  </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={handleDeleteSelected} disabled={isBatchUpdating}>
+                                      {isBatchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                      Yes, delete
+                                  </AlertDialogAction>
+                              </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedMaterials(new Set())} disabled={isBatchUpdating}>
+                          <X className="h-4 w-4" />
+                          <span className="sr-only">Clear selection</span>
+                      </Button>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-4">
-                    <div className="text-sm text-muted-foreground">Manage material visibility</div>
+                    <div className="text-sm text-muted-foreground">Global Actions</div>
                     <div className="flex gap-2">
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -420,9 +516,59 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {loading.materials ? <LoadingSkeleton /> : (
-                   <Table><TableHeader><TableRow><TableHead className="w-[50px]">#</TableHead><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Course</TableHead><TableHead>Faculty</TableHead><TableHead>Type</TableHead><TableHead>Downloads</TableHead><TableHead>Accessible</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                   <Table>
+                       <TableHeader>
+                           <TableRow>
+                               <TableHead className="w-12">
+                                   <Checkbox
+                                        checked={isAllSelected}
+                                        onCheckedChange={handleToggleSelectAll}
+                                        aria-label="Select all rows"
+                                   />
+                               </TableHead>
+                               <TableHead className="w-[50px]">#</TableHead>
+                               <TableHead>Title</TableHead><TableHead>File</TableHead>
+                               <TableHead>Course</TableHead>
+                               <TableHead>Faculty</TableHead>
+                               <TableHead>Type</TableHead>
+                               <TableHead>Downloads</TableHead>
+                               <TableHead>Accessible</TableHead>
+                               <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
                     <TableBody>
-                      {filteredAdminMaterials.map((material, index) => (<TableRow key={material.id}><TableCell className="font-medium">{index + 1}</TableCell><TableCell className="font-medium">{material.title}</TableCell><TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell><TableCell>{material.course}</TableCell><TableCell>{material.faculty}</TableCell><TableCell><Badge variant="secondary">{material.type}</Badge></TableCell><TableCell>{material.downloads}</TableCell><TableCell><Switch checked={material.isAccessible} onCheckedChange={(checked) => handleAccessibilityToggle(material.id, checked)} aria-label="Toggle material accessibility" /></TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}
+                      {filteredAdminMaterials.map((material, index) => (
+                        <TableRow 
+                            key={material.id}
+                            data-state={selectedMaterials.has(material.id) ? "selected" : undefined}
+                        >
+                          <TableCell>
+                            <Checkbox
+                                checked={selectedMaterials.has(material.id)}
+                                onCheckedChange={() => handleToggleSelect(material.id)}
+                                aria-label={`Select material ${material.title}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell className="font-medium">{material.title}</TableCell>
+                          <TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell>
+                          <TableCell>{material.course}</TableCell>
+                          <TableCell>{material.faculty}</TableCell>
+                          <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
+                          <TableCell>{material.downloads}</TableCell>
+                          <TableCell><Switch checked={material.isAccessible} onCheckedChange={(checked) => handleAccessibilityToggle(material.id, checked)} aria-label="Toggle material accessibility" /></TableCell>
+                          <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button>
+                              <AlertDialog>
+                                  <AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                      <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader>
+                                      <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter>
+                                  </AlertDialogContent>
+                              </AlertDialog>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody></Table>
                 )}
             </CardContent>
