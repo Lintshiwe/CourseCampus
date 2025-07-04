@@ -9,6 +9,7 @@ export type Material = {
   semester: number;
   type: 'Lecture Slides' | 'Past Papers' | 'Memos' | 'Tutorials' | 'Lab Manuals';
   url: string;
+  fileName: string;
   lecturer: string;
   uploadDate: any; 
   downloads: number;

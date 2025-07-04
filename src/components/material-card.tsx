@@ -27,6 +27,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
   const handleDownload = async () => {
     try {
         await incrementMaterialDownload(material.id);
+        // Optimistically update downloads count on the client
         material.downloads += 1; 
         window.open(material.url, '_blank');
     } catch (e) {
@@ -44,7 +45,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
   }
 
   return (
-    <Card className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
+    <Card className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300 bg-card">
       <CardHeader>
         <div className="flex justify-between items-start">
           <CardTitle className="font-headline text-lg mb-1">{material.title}</CardTitle>
@@ -64,6 +65,12 @@ export function MaterialCard({ material }: MaterialCardProps) {
            <Badge variant="outline">Year {material.year}</Badge>
            <Badge variant="outline">Sem {material.semester}</Badge>
         </div>
+        {material.fileName && (
+            <div className="flex items-center gap-2 pt-2 text-sm text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                <span className="truncate">{material.fileName}</span>
+            </div>
+        )}
       </CardContent>
       <CardFooter className="flex-col items-stretch space-y-2 pt-4">
          <div className="text-xs text-muted-foreground flex justify-between">
