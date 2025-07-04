@@ -13,6 +13,7 @@ export type Material = {
   uploadDate: any; 
   downloads: number;
   isAccessible: boolean;
+  helpful?: number;
 };
 
 export type Feedback = {

@@ -326,15 +326,25 @@ export default function AdminDashboardPage() {
   }, [materials, loading.materials]);
 
   const filteredAdminMaterials = React.useMemo(() => {
-    if (!adminSearchTerm) return materials;
     const lowercasedTerm = adminSearchTerm.toLowerCase();
-    return materials.filter(material => 
-        material.title.toLowerCase().includes(lowercasedTerm) ||
-        material.course.toLowerCase().includes(lowercasedTerm) ||
-        material.faculty.toLowerCase().includes(lowercasedTerm) ||
-        material.program.toLowerCase().includes(lowercasedTerm) ||
-        material.lecturer.toLowerCase().includes(lowercasedTerm)
+    const filtered = materials.filter(material => 
+        (
+            !adminSearchTerm ||
+            material.title.toLowerCase().includes(lowercasedTerm) ||
+            material.course.toLowerCase().includes(lowercasedTerm) ||
+            material.faculty.toLowerCase().includes(lowercasedTerm) ||
+            material.program.toLowerCase().includes(lowercasedTerm) ||
+            material.lecturer.toLowerCase().includes(lowercasedTerm)
+        )
     );
+
+    return filtered.sort((a, b) => {
+        const programCompare = a.program.localeCompare(b.program);
+        if (programCompare !== 0) return programCompare;
+        const courseCompare = a.course.localeCompare(b.course);
+        if (courseCompare !== 0) return courseCompare;
+        return a.title.localeCompare(b.title);
+    });
   }, [materials, adminSearchTerm]);
   
   const handleToggleSelect = (id: string) => {
@@ -551,8 +561,8 @@ export default function AdminDashboardPage() {
                                         aria-label="Select all rows"
                                    />
                                </TableHead>
-                               <TableHead className="w-[50px]">#</TableHead>
                                <TableHead>Title</TableHead><TableHead>File</TableHead>
+                               <TableHead>Program</TableHead>
                                <TableHead>Course</TableHead>
                                <TableHead>Faculty</TableHead>
                                <TableHead>Type</TableHead>
@@ -562,7 +572,7 @@ export default function AdminDashboardPage() {
                             </TableRow>
                         </TableHeader>
                     <TableBody>
-                      {filteredAdminMaterials.map((material, index) => (
+                      {filteredAdminMaterials.map((material) => (
                         <TableRow 
                             key={material.id}
                             data-state={selectedMaterials.has(material.id) ? "selected" : undefined}
@@ -574,9 +584,9 @@ export default function AdminDashboardPage() {
                                 aria-label={`Select material ${material.title}`}
                             />
                           </TableCell>
-                          <TableCell className="font-medium">{index + 1}</TableCell>
                           <TableCell className="font-medium">{material.title}</TableCell>
                           <TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell>
+                          <TableCell>{material.program}</TableCell>
                           <TableCell>{material.course}</TableCell>
                           <TableCell>{material.faculty}</TableCell>
                           <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
@@ -657,5 +667,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    

@@ -1,38 +1,54 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Admin-only collections that require authentication
+    match /feedback/{feedbackId} { allow read, write: if request.auth != null; }
+    match /bug-reports/{bugId} { allow read, write: if request.auth != null; }
+    match /social-links/{linkId} { allow read, write: if request.auth != null; }
+
+    // Materials have more complex rules
     match /materials/{materialId} {
-      allow read: if true;
-      allow write: if request.auth != null; // Logged-in admin can perform any write operation
-      allow update: if request.auth == null && request.resource.data.downloads == resource.data.downloads + 1; // Unauthenticated users can only increment downloads
+      // Public can read materials that are marked as accessible
+      allow read: if resource.data.isAccessible == true;
+      
+      // Admins (authed users) can create and delete materials
+      allow create, delete: if request.auth != null;
+      
+      // Update logic:
+      allow update: if 
+        // 1. Admins can update any field
+        request.auth != null 
+        // 2. OR, the public can increment the download count (and only that field)
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloads']) && 
+          request.resource.data.downloads == resource.data.downloads + 1
+        )
+        // 3. OR, the public can increment the helpfulness count (and only that field)
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpful']) && 
+          request.resource.data.helpful == resource.data.helpful + 1
+        );
     }
-
-    match /feedback/{feedbackId} {
-      allow read, delete: if request.auth != null;
-      allow create: if true;
-    }
-
-    match /bug-reports/{reportId} {
-        allow read, delete: if request.auth != null;
-        allow create: if true;
-    }
-
-    match /social-links/{linkId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-
+    
+    // Analytics collection rules
     match /analytics/siteStats {
+      // Admins can read the total stats
+      allow read: if request.auth != null;
+      // Anyone can increment the total visit count (and only that field)
+      allow write: if request.resource.data.visits == resource.data.visits + 1 &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits']);
+      
+      // Daily visit sub-collection
+      match /dailyVisits/{day} {
+        // Admins can read daily stats
         allow read: if request.auth != null;
-        allow create: if request.resource.data.visits == 1;
-        allow update: if 'visits' in request.resource.data && request.resource.data.size() == 1; // Only allow updating the visits field via increment
-
-        match /dailyVisits/{day} {
-            allow read: if request.auth != null;
-            allow create: if request.resource.data.visits == 1;
-            allow update: if 'visits' in request.resource.data && request.resource.data.size() == 1; // Only allow updating the visits field via increment
-        }
+        // Anyone can increment the daily visit count (and only that field)
+        allow write: if request.resource.data.visits == resource.data.visits + 1 &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits']);
+      }
     }
   }
 }

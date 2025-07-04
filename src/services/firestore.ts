@@ -1,3 +1,4 @@
+
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, startAt, endAt, writeBatch } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink, BugReport } from '@/types';
@@ -29,12 +30,13 @@ async function getCollection<T>(collectionName: string, orderField?: string, ord
 // Materials
 export const getMaterials = () => getCollection<Material>('materials', 'uploadDate', 'desc');
 
-export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads' | 'isAccessible'>) => {
+export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads' | 'isAccessible' | 'helpful'>) => {
     return addDoc(collection(db, 'materials'), {
         ...materialData,
         uploadDate: serverTimestamp(),
         downloads: 0,
         isAccessible: true,
+        helpful: 0,
     });
 };
 
@@ -73,6 +75,14 @@ export const incrementMaterialDownload = (id: string) => {
         downloads: increment(1)
     });
 };
+
+export const incrementMaterialHelpful = (id: string) => {
+    const materialRef = doc(db, 'materials', id);
+    return updateDoc(materialRef, {
+        helpful: increment(1)
+    });
+};
+
 
 // Feedback
 export const getFeedback = () => getCollection<Feedback>('feedback', 'createdAt', 'desc');

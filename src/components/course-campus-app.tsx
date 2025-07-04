@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -21,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { MaterialCard } from './material-card';
 import type { Material, SocialLink } from '@/types';
-import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2 } from 'lucide-react';
+import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2, Mail } from 'lucide-react';
 import { getMaterials, addFeedback, addBugReport, getSocialLinks, incrementSiteVisit } from '@/services/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -95,19 +97,52 @@ export function CourseCampusApp() {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
   
-  const filteredMaterials = materials.filter(material => {
-    return (
-      material.isAccessible &&
-      (material.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       material.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       material.lecturer.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (filters.faculty === 'all' || material.faculty === filters.faculty) &&
-      (filters.program === 'all' || material.program === filters.program) &&
-      (filters.year === 'all' || material.year.toString() === filters.year) &&
-      (filters.semester === 'all' || material.semester.toString() === filters.semester) &&
-      (filters.type === 'all' || material.type === filters.type)
-    );
-  });
+  const filteredMaterials = React.useMemo(() => {
+    return materials.filter(material => {
+      return (
+        material.isAccessible &&
+        (material.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+         material.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         material.lecturer.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (filters.faculty === 'all' || material.faculty === filters.faculty) &&
+        (filters.program === 'all' || material.program === filters.program) &&
+        (filters.year === 'all' || material.year.toString() === filters.year) &&
+        (filters.semester === 'all' || material.semester.toString() === filters.semester) &&
+        (filters.type === 'all' || material.type === filters.type)
+      );
+    }).sort((a, b) => {
+        const programCompare = a.program.localeCompare(b.program);
+        if (programCompare !== 0) return programCompare;
+        const courseCompare = a.course.localeCompare(b.course);
+        if (courseCompare !== 0) return courseCompare;
+        return a.title.localeCompare(b.title);
+    });
+  }, [materials, searchTerm, filters]);
+
+  const groupedMaterials = React.useMemo(() => {
+    if (loading) return {};
+    const groups = filteredMaterials.reduce((acc, material) => {
+        const groupKey = `Year ${material.year} - Semester ${material.semester}`;
+        if (!acc[groupKey]) {
+            acc[groupKey] = [];
+        }
+        acc[groupKey].push(material);
+        return acc;
+    }, {} as Record<string, Material[]>);
+    
+    const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+        const [yearA, semA] = (a.match(/\d+/g) || ['0', '0']).map(Number);
+        const [yearB, semB] = (b.match(/\d+/g) || ['0', '0']).map(Number);
+        if (yearA !== yearB) return yearB - yearA; // Sort by year descending
+        return semB - semA; // Sort by semester descending
+    });
+    
+    const sortedGroups: Record<string, Material[]> = {};
+    for (const key of sortedGroupKeys) {
+        sortedGroups[key] = groups[key];
+    }
+    return sortedGroups;
+  }, [filteredMaterials, loading]);
   
   const handleFeedbackSubmit = async () => {
     if (!feedbackText.trim()) { toast({ variant: "destructive", title: "Empty Feedback", description: "Please enter your feedback before submitting." }); return; }
@@ -176,6 +211,7 @@ export function CourseCampusApp() {
                     <DialogFooter><Button onClick={handleBugReportSubmit} disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Report Bug</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
+            <SidebarMenuItem><SidebarMenuButton href="mailto:support@coursecampus.ac.za" tooltip="Contact Us"><Mail /><span>Contact Us</span></SidebarMenuButton></SidebarMenuItem>
             <SidebarMenuItem><SidebarMenuButton href="/admin/login" tooltip="Admin Login"><Shield /><span>Admin</span></SidebarMenuButton></SidebarMenuItem>
           </SidebarMenu>
           <Separator className="my-2 bg-sidebar-border" />
@@ -193,9 +229,20 @@ export function CourseCampusApp() {
         <main className="flex-1 p-4 md:p-6 lg:p-8">
             {loading ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}</div>) : 
              filteredMaterials.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredMaterials.map(material => (<MaterialCard key={material.id} material={material} />))}
-                </div>
+                <Accordion type="multiple" defaultValue={Object.keys(groupedMaterials)} className="w-full space-y-4">
+                  {Object.entries(groupedMaterials).map(([groupName, groupMaterials]) => (
+                    <AccordionItem key={groupName} value={groupName} className="border-b-0">
+                      <AccordionTrigger className="text-xl font-headline font-semibold px-4 py-3 bg-card rounded-lg hover:no-underline data-[state=open]:rounded-b-none">
+                        {groupName}
+                      </AccordionTrigger>
+                      <AccordionContent className="bg-card p-0 rounded-b-lg">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
+                            {groupMaterials.map(material => (<MaterialCard key={material.id} material={material} />))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-20">
                     <Search className="w-16 h-16 mb-4" /><h3 className="text-xl font-headline font-semibold">No Materials Found</h3><p className="max-w-md mt-2">Your search and filter criteria did not match any materials, or no materials are currently accessible. Please try again later.</p>
