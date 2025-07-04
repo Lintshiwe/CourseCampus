@@ -1,6 +1,7 @@
 
 "use client"
 
+import * as React from 'react';
 import type { Material } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,11 +111,11 @@ export function MaterialCard({ material }: MaterialCardProps) {
          <div className="flex items-center justify-between pt-2 border-t">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span className="font-medium">Helpful?</span>
-                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRating(true)} disabled={isSubmittingRating || rating !== null}>
+                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRating(true)} disabled={isSubmittingRating || rating !== null} aria-label="Mark as helpful">
                     {isSubmittingRating && rating === null ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className={cn("h-4 w-4", rating === 'helpful' && "text-primary fill-current")} />}
                 </Button>
                 <span className="font-semibold min-w-[1rem] text-center">{displayHelpfulCount}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRating(false)} disabled={isSubmittingRating || rating !== null}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRating(false)} disabled={isSubmittingRating || rating !== null} aria-label="Mark as not helpful">
                     <ThumbsDown className={cn("h-4 w-4", rating === 'not-helpful' && "text-destructive fill-current")} />
                 </Button>
             </div>
