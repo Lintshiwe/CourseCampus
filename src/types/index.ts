@@ -33,3 +33,13 @@ export type SocialLink = {
   name: string;
   url: string;
 };
+
+export type SiteStats = {
+  totalVisits: number;
+};
+
+export type DailyVisit = {
+  id: string; // YYYY-MM-DD
+  count: number;
+  date: Date;
+};

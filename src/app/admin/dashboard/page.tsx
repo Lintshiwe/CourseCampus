@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer, LineChart, Line, Tooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,14 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import type { Material, Feedback, BugReport, SocialLink, SiteStats, DailyVisit } from '@/types';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, RefreshCw, Eye, EyeOff, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, batchUpdateMaterials, batchDeleteMaterials } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, batchUpdateMaterials, batchDeleteMaterials, getSiteStats, getDailyVisits } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChartConfig } from '@/components/ui/chart';
@@ -55,9 +55,8 @@ const chartConfig = {
 
 const LoadingSkeleton = () => (
     <div className="space-y-4">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
         <Skeleton className="h-64 w-full" />
     </div>
 )
@@ -68,7 +67,9 @@ export default function AdminDashboardPage() {
   const [feedback, setFeedback] = React.useState<Feedback[]>([]);
   const [bugReports, setBugReports] = React.useState<BugReport[]>([]);
   const [socialLinks, setSocialLinks] = React.useState<SocialLink[]>([]);
-  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true });
+  const [siteStats, setSiteStats] = React.useState<SiteStats | null>(null);
+  const [dailyVisits, setDailyVisits] = React.useState<DailyVisit[]>([]);
+  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true, analytics: true });
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
@@ -81,23 +82,27 @@ export default function AdminDashboardPage() {
   });
 
   const fetchAllData = React.useCallback(async () => {
-    setLoading({ materials: true, feedback: true, bugs: true, social: true });
-    const [materialsData, feedbackData, bugReportsData, socialLinksData] = await Promise.all([
+    setLoading({ materials: true, feedback: true, bugs: true, social: true, analytics: true });
+    const [materialsData, feedbackData, bugReportsData, socialLinksData, siteStatsData, dailyVisitsData] = await Promise.all([
         getMaterials(),
         getFeedback(),
         getBugReports(),
         getSocialLinks(),
+        getSiteStats(),
+        getDailyVisits()
     ]);
     
     setMaterials(materialsData);
     setFeedback(feedbackData);
     setBugReports(bugReportsData);
+    setSiteStats(siteStatsData);
+    setDailyVisits(dailyVisitsData);
 
     const defaultLinks: SocialLink[] = [ { id: 'facebook', name: 'Facebook', url: '' }, { id: 'twitter', name: 'Twitter', url: '' }, { id: 'linkedin', name: 'LinkedIn', url: '' } ];
     const mergedLinks = defaultLinks.map(defaultLink => socialLinksData.find(dbLink => dbLink.id === defaultLink.id) || defaultLink);
     setSocialLinks(mergedLinks);
     
-    setLoading({ materials: false, feedback: false, bugs: false, social: false });
+    setLoading({ materials: false, feedback: false, bugs: false, social: false, analytics: false });
   }, []);
 
   React.useEffect(() => {
@@ -201,8 +206,8 @@ export default function AdminDashboardPage() {
       setSocialLinks(prev => prev.map(link => link.id === id ? { ...link, url } : link));
   };
   
-  const analyticsData = React.useMemo(() => {
-    if (loading.materials) return [];
+  const downloadsByFacultyData = React.useMemo(() => {
+    if (loading.analytics) return [];
     const dataByFaculty = materials.reduce((acc, material) => {
       const faculty = material.faculty;
       if (!acc[faculty]) {
@@ -212,7 +217,31 @@ export default function AdminDashboardPage() {
       return acc;
     }, {} as Record<string, number>);
     return Object.entries(dataByFaculty).map(([name, downloads]) => ({ name, downloads }));
-  }, [materials, loading.materials]);
+  }, [materials, loading.analytics]);
+
+  const dailyVisitsChartData = React.useMemo(() => {
+    if (loading.analytics) return [];
+    
+    const last30Days = new Map<string, number>();
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toLocaleDateString('en-CA');
+        last30Days.set(key, 0);
+    }
+    
+    dailyVisits.forEach(visit => {
+        const key = visit.date.toLocaleDateString('en-CA');
+        if (last30Days.has(key)) {
+            last30Days.set(key, visit.count);
+        }
+    });
+
+    return Array.from(last30Days.entries()).map(([date, visits]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        visits
+    }));
+  }, [dailyVisits, loading.analytics]);
 
   const filteredMaterials = React.useMemo(() => {
     return materials.filter(material =>
@@ -307,24 +336,62 @@ export default function AdminDashboardPage() {
                     <CardTitle>Platform Analytics</CardTitle>
                     <CardDescription>Insights into platform usage and user engagement.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loading.materials ? <LoadingSkeleton /> : (
-                         <Card>
-                            <CardHeader>
-                                <CardTitle>Material Downloads by Faculty</CardTitle>
-                            </CardHeader>
-                            <CardContent className="h-96">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={analyticsData}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
-                                        <YAxis />
-                                        <Legend />
-                                        <Bar dataKey="downloads" fill="hsl(var(--primary))" />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
+                <CardContent className="space-y-6">
+                    {loading.analytics ? <LoadingSkeleton /> : (
+                         <div className="grid gap-6">
+                             <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Total Website Visits</CardTitle>
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{siteStats?.totalVisits ?? 0}</div>
+                                    <p className="text-xs text-muted-foreground">Total number of times the site has been visited.</p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Daily Website Visits (Last 30 Days)</CardTitle>
+                                </CardHeader>
+                                <CardContent className="h-80 pl-2">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={dailyVisitsChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="date" tickLine={false} axisLine={false} stroke="#888888" fontSize={12} />
+                                            <YAxis tickLine={false} axisLine={false} stroke="#888888" fontSize={12} allowDecimals={false} />
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: "hsl(var(--background))",
+                                                    border: "1px solid hsl(var(--border))",
+                                                    borderRadius: "var(--radius)"
+                                                }}
+                                                labelStyle={{ color: "hsl(var(--foreground))" }}
+                                            />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="visits" name="Visits" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Material Downloads by Faculty</CardTitle>
+                                </CardHeader>
+                                <CardContent className="h-96">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={downloadsByFacultyData}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
+                                            <YAxis />
+                                            <Legend />
+                                            <Bar dataKey="downloads" fill="hsl(var(--primary))" />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </CardContent>
+                            </Card>
+                         </div>
                     )}
                 </CardContent>
             </Card>

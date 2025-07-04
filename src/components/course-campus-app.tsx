@@ -32,7 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MaterialCard } from './material-card';
 import type { Material, SocialLink } from '@/types';
 import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2 } from 'lucide-react';
-import { getMaterials, addFeedback, addBugReport, getSocialLinks } from '@/services/firestore';
+import { getMaterials, addFeedback, addBugReport, getSocialLinks, logVisit } from '@/services/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const FilterSelect = ({ label, placeholder, options, value, onChange }: { label: string, placeholder: string, options: string[], value: string, onChange: (value: string) => void }) => (
@@ -68,11 +68,16 @@ export function CourseCampusApp() {
   });
 
   React.useEffect(() => {
+    logVisit();
+  }, []);
+
+  React.useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
         const [materialsData, socialLinksData] = await Promise.all([getMaterials(), getSocialLinks()]);
         
-        setMaterials(materialsData);
+        const accessibleMaterials = materialsData.filter(m => m.isAccessible);
+        setMaterials(accessibleMaterials);
         
         if (socialLinksData.length > 0) {
             const links: Record<string, string> = { facebook: '#', twitter: '#', linkedin: '#' };

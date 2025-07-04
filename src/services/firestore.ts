@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
-import type { Material, Feedback, SocialLink, BugReport } from '@/types';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, writeBatch, runTransaction, Timestamp, where } from 'firebase/firestore';
+import type { Material, Feedback, SocialLink, BugReport, SiteStats, DailyVisit } from '@/types';
 
 // Generic function to fetch a collection
 async function getCollection<T>(collectionName: string, orderField?: string, orderDirection: 'asc' | 'desc' = 'asc'): Promise<T[]> {
@@ -86,10 +86,85 @@ export const getSocialLinks = () => getCollection<SocialLink>('social-links');
 
 export const updateSocialLinks = async (links: SocialLink[]) => {
     try {
-        const batch = links.map(link => setDoc(doc(db, 'social-links', link.id), { name: link.name, url: link.url }, { merge: true }));
-        await Promise.all(batch);
+        const batch = writeBatch(db);
+        links.forEach(link => {
+            const docRef = doc(db, 'social-links', link.id);
+            batch.set(docRef, { name: link.name, url: link.url }, { merge: true });
+        });
+        await batch.commit();
     } catch (error) {
         console.error("Error updating social links:", error);
         throw error;
+    }
+};
+
+// Analytics
+export const getSiteStats = async (): Promise<SiteStats> => {
+    const docRef = doc(db, 'analytics', 'siteStats');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data() as SiteStats;
+    }
+    return { totalVisits: 0 };
+};
+
+export const getDailyVisits = async (): Promise<DailyVisit[]> => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoTimestamp = Timestamp.fromDate(thirtyDaysAgo);
+
+    const collRef = collection(db, 'dailyVisits');
+    const q = query(collRef, where('date', '>=', thirtyDaysAgoTimestamp), orderBy('date', 'asc'));
+
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                count: data.count,
+                date: data.date.toDate()
+            } as DailyVisit;
+        });
+    } catch (error) {
+        console.error("Error fetching daily visits:", error);
+        return [];
+    }
+};
+
+
+export const logVisit = async () => {
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
+    
+    if (sessionStorage.getItem('siteVisited')) {
+        return;
+    }
+    sessionStorage.setItem('siteVisited', 'true');
+
+    const today = new Date();
+    const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    const siteStatsRef = doc(db, 'analytics', 'siteStats');
+    const dailyVisitRef = doc(db, 'dailyVisits', dateKey);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const dailyVisitDoc = await transaction.get(dailyVisitRef);
+
+            transaction.set(siteStatsRef, { totalVisits: increment(1) }, { merge: true });
+
+            if (!dailyVisitDoc.exists()) {
+                const startOfDay = new Date(today);
+                startOfDay.setHours(0, 0, 0, 0);
+                transaction.set(dailyVisitRef, { 
+                    count: 1,
+                    date: Timestamp.fromDate(startOfDay)
+                });
+            } else {
+                transaction.update(dailyVisitRef, { count: increment(1) });
+            }
+        });
+    } catch (e) {
+        console.error("Visit logging failed: ", e);
     }
 };
