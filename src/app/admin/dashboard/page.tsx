@@ -87,6 +87,7 @@ export default function AdminDashboardPage() {
         getSiteStats(),
     ]);
     
+    materialsData.sort((a, b) => a.course.localeCompare(b.course));
     setMaterials(materialsData);
     setFeedback(feedbackData);
     setBugReports(bugReportsData);
@@ -353,3 +354,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
