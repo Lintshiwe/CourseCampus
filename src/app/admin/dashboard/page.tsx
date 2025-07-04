@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, ResponsiveContainer, LineChart, Line, Tooltip } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,7 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats, getDailyVisits } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
@@ -49,6 +49,10 @@ const chartConfig = {
     label: "Downloads",
     color: "hsl(var(--primary))",
   },
+  visits: {
+    label: "Visits",
+    color: "hsl(var(--chart-2))",
+  }
 } satisfies ChartConfig;
 
 const LoadingSkeleton = () => (
@@ -67,7 +71,8 @@ export default function AdminDashboardPage() {
   const [bugReports, setBugReports] = React.useState<BugReport[]>([]);
   const [socialLinks, setSocialLinks] = React.useState<SocialLink[]>([]);
   const [siteVisits, setSiteVisits] = React.useState(0);
-  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true, stats: true });
+  const [dailyVisits, setDailyVisits] = React.useState<{ date: string; visits: number; }[]>([]);
+  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true, stats: true, dailyVisits: true });
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
@@ -78,13 +83,14 @@ export default function AdminDashboardPage() {
   });
 
   const fetchAllData = React.useCallback(async () => {
-    setLoading({ materials: true, feedback: true, bugs: true, social: true, stats: true });
-    const [materialsData, feedbackData, bugReportsData, socialLinksData, statsData] = await Promise.all([
+    setLoading({ materials: true, feedback: true, bugs: true, social: true, stats: true, dailyVisits: true });
+    const [materialsData, feedbackData, bugReportsData, socialLinksData, statsData, dailyVisitsData] = await Promise.all([
         getMaterials(),
         getFeedback(),
         getBugReports(),
         getSocialLinks(),
         getSiteStats(),
+        getDailyVisits(),
     ]);
     
     materialsData.sort((a, b) => a.course.localeCompare(b.course));
@@ -92,12 +98,13 @@ export default function AdminDashboardPage() {
     setFeedback(feedbackData);
     setBugReports(bugReportsData);
     setSiteVisits(statsData.visits);
+    setDailyVisits(dailyVisitsData);
 
     const defaultLinks: SocialLink[] = [ { id: 'facebook', name: 'Facebook', url: '' }, { id: 'twitter', name: 'Twitter', url: '' }, { id: 'linkedin', name: 'LinkedIn', url: '' } ];
     const mergedLinks = defaultLinks.map(defaultLink => socialLinksData.find(dbLink => dbLink.id === defaultLink.id) || defaultLink);
     setSocialLinks(mergedLinks);
     
-    setLoading({ materials: false, feedback: false, bugs: false, social: false, stats: false });
+    setLoading({ materials: false, feedback: false, bugs: false, social: false, stats: false, dailyVisits: false });
   }, []);
 
   React.useEffect(() => {
@@ -241,10 +248,33 @@ export default function AdminDashboardPage() {
                           </CardHeader>
                           <CardContent>
                             {loading.stats ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">{siteVisits.toLocaleString()}</div>}
-                            <p className="text-xs text-muted-foreground">Total number of times the homepage has been loaded.</p>
+                            <p className="text-xs text-muted-foreground">Total number of times the site has been visited.</p>
                           </CardContent>
                        </Card>
                     </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Daily Website Visits (Last 30 Days)</CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-[20rem]">
+                        {loading.dailyVisits ? <Skeleton className="h-full w-full" /> : (
+                          <ChartContainer config={chartConfig} className="w-full h-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart accessibilityLayer data={dailyVisits} margin={{ top: 5, right: 20, left: -10, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                                    <YAxis />
+                                    <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                                    <Legend />
+                                    <Line dataKey="visits" type="monotone" stroke="var(--color-visits)" strokeWidth={2} dot={false} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                          </ChartContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+
                     {loading.materials ? <LoadingSkeleton /> : (
                          <Card>
                             <CardHeader>
@@ -354,5 +384,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    

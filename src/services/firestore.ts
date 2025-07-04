@@ -1,6 +1,7 @@
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, startAt, endAt } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink, BugReport } from '@/types';
+import { format, subDays, eachDayOfInterval } from 'date-fns';
 
 // Generic function to fetch a collection
 async function getCollection<T>(collectionName: string, orderField?: string, orderDirection: 'asc' | 'desc' = 'asc'): Promise<T[]> {
@@ -89,14 +90,43 @@ export const getSiteStats = async () => {
     }
 };
 
+export const getDailyVisits = async (days = 30): Promise<{ date: string; visits: number }[]> => {
+    try {
+        const endDate = new Date();
+        const startDate = subDays(endDate, days - 1);
+        
+        const dailyVisitsRef = collection(db, 'analytics', 'siteStats', 'dailyVisits');
+        const q = query(dailyVisitsRef, orderBy('__name__'), startAt(format(startDate, 'yyyy-MM-dd')), endAt(format(endDate, 'yyyy-MM-dd')));
+
+        const querySnapshot = await getDocs(q);
+        const visitsMap = new Map(querySnapshot.docs.map(doc => [doc.id, doc.data().visits]));
+
+        const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
+        
+        return dateRange.map(date => {
+            const dateString = format(date, 'yyyy-MM-dd');
+            return {
+                date: format(date, 'MMM d'), // Format for chart display
+                visits: visitsMap.get(dateString) || 0,
+            };
+        });
+    } catch (error) {
+        console.error("Error fetching daily visits:", error);
+        return [];
+    }
+};
+
 export const incrementSiteVisit = () => {
-    const statsRef = doc(db, 'analytics', 'siteStats');
-    return updateDoc(statsRef, {
-        visits: increment(1)
-    }).catch(error => {
-        if (error.code === 'not-found') {
-            return setDoc(statsRef, { visits: 1 });
-        }
-        console.error("Error incrementing site visit:", error);
+    // Increment total visits
+    const totalStatsRef = doc(db, 'analytics', 'siteStats');
+    setDoc(totalStatsRef, { visits: increment(1) }, { merge: true }).catch(error => {
+        console.error("Error incrementing total site visit:", error);
+    });
+
+    // Increment today's visits
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const dailyVisitRef = doc(db, 'analytics', 'siteStats', 'dailyVisits', today);
+    setDoc(dailyVisitRef, { visits: increment(1) }, { merge: true }).catch(error => {
+        console.error("Error incrementing daily site visit:", error);
     });
 };
