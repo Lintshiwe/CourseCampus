@@ -114,28 +114,45 @@ export function CourseCampusApp() {
   }, [materials, searchTerm, filters]);
 
   const groupedMaterials = React.useMemo(() => {
+    // 1. Group by program, then by semester
     const grouped = filteredMaterials.reduce((acc, material) => {
-        const program = material.program || 'General';
-        const semester = `Semester ${material.semester}`;
-        
-        if (!acc[program]) {
-            acc[program] = {};
-        }
-        if (!acc[program][semester]) {
-            acc[program][semester] = [];
-        }
-        acc[program][semester].push(material);
-        
-        return acc;
+      const program = material.program || 'General';
+      const semester = `Semester ${material.semester}`;
+
+      if (!acc[program]) {
+        acc[program] = {};
+      }
+      if (!acc[program][semester]) {
+        acc[program][semester] = [];
+      }
+      acc[program][semester].push(material);
+
+      return acc;
     }, {} as Record<string, Record<string, Material[]>>);
 
-    return Object.keys(grouped).sort().reduce(
-      (obj, key) => { 
-        obj[key] = grouped[key]; 
+    // 2. Sort the final structure
+    // Sort programs alphabetically
+    return Object.keys(grouped)
+      .sort((a, b) => a.localeCompare(b))
+      .reduce((obj, programKey) => {
+        const semesters = grouped[programKey];
+        // Sort semesters numerically
+        const sortedSemesters = Object.keys(semesters)
+          .sort((a, b) => {
+            const numA = parseInt(a.replace('Semester ', ''), 10);
+            const numB = parseInt(b.replace('Semester ', ''), 10);
+            return numA - numB;
+          })
+          .reduce((semObj, semesterKey) => {
+            // Sort materials by title within each semester
+            semObj[semesterKey] = semesters[semesterKey].sort((a, b) =>
+              a.title.localeCompare(b.title)
+            );
+            return semObj;
+          }, {} as Record<string, Material[]>);
+        obj[programKey] = sortedSemesters;
         return obj;
-      }, 
-      {} as Record<string, Record<string, Material[]>>
-    );
+      }, {} as Record<string, Record<string, Material[]>>);
   }, [filteredMaterials]);
 
 
@@ -152,7 +169,7 @@ export function CourseCampusApp() {
   };
 
   const handleBugReportSubmit = async () => {
-    if (!bugText.trim()) { toast({ variant: "destructive", title: "Empty Report", description: "Please describe the bug before submitting." }); return; }
+    if (!bugText.trim()) { toast({ variant: "destructive", title: "Empty Report", description: "Please describe the bug you encountered." }); return; }
     setIsSubmitting(true);
     try {
         await addBugReport(bugText);
@@ -266,5 +283,3 @@ export function CourseCampusApp() {
     </SidebarProvider>
   );
 }
-
-    
