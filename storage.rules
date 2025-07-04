@@ -1,9 +1,10 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to all files
-    match /{allPaths=**} {
+    // Files are public to read, but only admins can upload/delete
+    match /materials/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null;
     }

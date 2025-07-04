@@ -1,29 +1,44 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Materials can be read by anyone, but only written by authenticated admins.
-    match /materials/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Social links can be read by anyone, but only written by authenticated admins.
-    match /social-links/{docId} {
+
+    // Materials: Public can read, Admins can do anything
+    match /materials/{materialId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Feedback can be created by anyone, but only managed by authenticated admins.
-    match /feedback/{docId} {
+    // Feedback: Public can create, Admins can read/delete
+    match /feedback/{feedbackId} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, delete: if request.auth != null;
+      allow update: if false; // No updates allowed
     }
 
-    // Bug reports can be created by anyone, but only managed by authenticated admins.
-    match /bug-reports/{docId} {
+    // Bug Reports: Public can create, Admins can read/delete
+    match /bug-reports/{reportId} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, delete: if request.auth != null;
+      allow update: if false; // No updates allowed
+    }
+
+    // Social Links: Public can read, Admins can do anything
+    match /social-links/{linkId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Analytics: Site stats and daily visits can be incremented by anyone
+    match /analytics/siteStats {
+      allow read: if true;
+      allow write: if true; // Allow incrementing visits
+    }
+    
+    match /dailyVisits/{visitId} {
+       allow read: if true;
+       allow write: if true; // Allow creating and incrementing daily visits
     }
   }
 }
