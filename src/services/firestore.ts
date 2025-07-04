@@ -1,6 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, writeBatch } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink, BugReport } from '@/types';
 
 // Generic function to fetch a collection
@@ -29,11 +29,12 @@ async function getCollection<T>(collectionName: string, orderField?: string, ord
 // Materials
 export const getMaterials = () => getCollection<Material>('materials', 'uploadDate', 'desc');
 
-export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads'>) => {
+export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads' | 'isAccessible'>) => {
     return addDoc(collection(db, 'materials'), {
         ...materialData,
         uploadDate: serverTimestamp(),
         downloads: 0,
+        isAccessible: true,
     });
 };
 
@@ -43,6 +44,24 @@ export const updateMaterial = (id: string, materialData: Partial<Omit<Material, 
 };
 
 export const deleteMaterial = (id: string) => deleteDoc(doc(db, 'materials', id));
+
+export const batchUpdateMaterials = async (ids: string[], data: Partial<Omit<Material, 'id'>>) => {
+    const batch = writeBatch(db);
+    ids.forEach(id => {
+        const docRef = doc(db, 'materials', id);
+        batch.update(docRef, data);
+    });
+    return batch.commit();
+}
+
+export const batchDeleteMaterials = async (ids: string[]) => {
+    const batch = writeBatch(db);
+    ids.forEach(id => {
+        const docRef = doc(db, 'materials', id);
+        batch.delete(docRef);
+    });
+    return batch.commit();
+}
 
 export const incrementMaterialDownload = (id: string) => {
     const materialRef = doc(db, 'materials', id);

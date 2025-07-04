@@ -15,16 +15,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, Sync, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, batchUpdateMaterials, batchDeleteMaterials } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChartConfig } from '@/components/ui/chart';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 
 const materialSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -69,6 +72,8 @@ export default function AdminDashboardPage() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedMaterials, setSelectedMaterials] = React.useState<string[]>([]);
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
@@ -209,15 +214,91 @@ export default function AdminDashboardPage() {
     return Object.entries(dataByFaculty).map(([name, downloads]) => ({ name, downloads }));
   }, [materials, loading.materials]);
 
+  const filteredMaterials = React.useMemo(() => {
+    return materials.filter(material =>
+      (material.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       material.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       material.lecturer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       material.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       material.program.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       material.faculty.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [materials, searchTerm]);
+  
+  const handleToggleAccessibility = async (id: string, isAccessible: boolean) => {
+    try {
+        await updateMaterial(id, { isAccessible });
+        setMaterials(prev => prev.map(m => m.id === id ? { ...m, isAccessible } : m));
+        toast({ title: 'Success', description: `Material visibility updated.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to update material.' });
+    }
+  };
+
+  const handleBatchUpdateAccessibility = async (accessible: boolean) => {
+    if (selectedMaterials.length === 0) return;
+    try {
+        await batchUpdateMaterials(selectedMaterials, { isAccessible: accessible });
+        setMaterials(prev => prev.map(m => selectedMaterials.includes(m.id) ? { ...m, isAccessible: accessible } : m));
+        toast({ title: 'Success', description: `${selectedMaterials.length} materials updated.` });
+        setSelectedMaterials([]);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to update materials.' });
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedMaterials.length === 0) return;
+    try {
+        await batchDeleteMaterials(selectedMaterials);
+        setMaterials(prev => prev.filter(m => !selectedMaterials.includes(m.id)));
+        toast({ title: 'Success', description: `${selectedMaterials.length} materials deleted.` });
+        setSelectedMaterials([]);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete materials.' });
+    }
+  };
+
+  const handleSyncWithSemester = async () => {
+    const currentMonth = new Date().getMonth(); // 0-11
+    const isFirstSemester = currentMonth >= 1 && currentMonth <= 5; // Feb-June
+    const isSecondSemester = currentMonth >= 7 && currentMonth <= 11; // Aug-Dec
+
+    const updates = materials.map(m => {
+        let isAccessible = false;
+        if ((m.semester === 1 && isFirstSemester) || (m.semester === 2 && isSecondSemester)) {
+            isAccessible = true;
+        }
+        return updateMaterial(m.id, { isAccessible });
+    });
+
+    try {
+        await Promise.all(updates);
+        await fetchAllData();
+        toast({ title: 'Success', description: 'Materials synced with current semester.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to sync materials.' });
+    }
+  };
+  
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+        setSelectedMaterials(filteredMaterials.map(m => m.id));
+    } else {
+        setSelectedMaterials([]);
+    }
+  }
+
 
   return (
     <div className="container mx-auto py-4">
       <Tabs defaultValue="materials">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="analytics"><BarChart2 className="mr-2 h-4 w-4" />Analytics</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="feedback">Feedback</TabsTrigger>
           <TabsTrigger value="bugs"><Bug className="mr-2 h-4 w-4"/>Bug Reports</TabsTrigger>
+          <TabsTrigger value="social">Social Links</TabsTrigger>
         </TabsList>
 
         <TabsContent value="analytics">
@@ -256,26 +337,62 @@ export default function AdminDashboardPage() {
                 <CardDescription>Manage the course materials available in the app.</CardDescription>
             </CardHeader>
             <CardContent>
+                <div className="flex justify-between items-center gap-4 mb-4">
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search materials..." className="pl-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="mb-4 p-2 border rounded-lg">
+                    <div className="flex items-center justify-between">
+                         <h3 className="text-sm font-medium">
+                            Global Actions
+                            {selectedMaterials.length > 0 && <span className="text-muted-foreground ml-2">({selectedMaterials.length} selected)</span>}
+                         </h3>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={handleSyncWithSemester}><Sync className="mr-2 h-4 w-4" /> Sync with Semester</Button>
+                            <Button variant="outline" size="sm" disabled={selectedMaterials.length === 0} onClick={() => handleBatchUpdateAccessibility(true)}><Eye className="mr-2 h-4 w-4" /> Make Visible</Button>
+                            <Button variant="outline" size="sm" disabled={selectedMaterials.length === 0} onClick={() => handleBatchUpdateAccessibility(false)}><EyeOff className="mr-2 h-4 w-4" /> Make Hidden</Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild><Button variant="destructive" size="sm" disabled={selectedMaterials.length === 0}><Trash2 className="mr-2 h-4 w-4" />Delete Selected</Button></AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the {selectedMaterials.length} selected material(s).</AlertDialogDescription></AlertDialogHeader>
+                                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleBatchDelete}>Delete</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </div>
+                </div>
+
                 {loading.materials ? <LoadingSkeleton /> : (
                    <Table>
                        <TableHeader>
                            <TableRow>
+                               <TableHead className="w-12"><Checkbox onCheckedChange={(checked) => setSelectedMaterials(checked ? filteredMaterials.map(m=>m.id) : [])} checked={selectedMaterials.length === filteredMaterials.length && filteredMaterials.length > 0} /></TableHead>
+                               <TableHead className="w-12">#</TableHead>
                                <TableHead>Title</TableHead>
+                               <TableHead>File</TableHead>
                                <TableHead>Course</TableHead>
-                               <TableHead>Lecturer</TableHead>
+                               <TableHead>Faculty</TableHead>
                                <TableHead>Type</TableHead>
                                <TableHead>Downloads</TableHead>
+                               <TableHead>Accessible</TableHead>
                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                     <TableBody>
-                      {materials.map((material) => (
-                        <TableRow key={material.id}>
+                      {filteredMaterials.map((material, index) => (
+                        <TableRow key={material.id} data-state={selectedMaterials.includes(material.id) && "selected"}>
+                          <TableCell><Checkbox onCheckedChange={(checked) => setSelectedMaterials(checked ? [...selectedMaterials, material.id] : selectedMaterials.filter(id => id !== material.id))} checked={selectedMaterials.includes(material.id)} /></TableCell>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
                           <TableCell className="font-medium">{material.title}</TableCell>
+                          <TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">{material.fileName}</a></TableCell>
                           <TableCell>{material.course}</TableCell>
-                          <TableCell>{material.lecturer}</TableCell>
+                          <TableCell>{material.faculty}</TableCell>
                           <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
                           <TableCell>{material.downloads}</TableCell>
+                          <TableCell><Switch checked={material.isAccessible} onCheckedChange={(checked) => handleToggleAccessibility(material.id, checked)} /></TableCell>
                           <TableCell className="text-right">
                               <Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button>
                               <AlertDialog>
