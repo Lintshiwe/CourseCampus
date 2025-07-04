@@ -24,6 +24,7 @@ import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback,
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { getFileNameFromUrl } from '@/lib/utils';
 
 const materialSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -73,21 +74,6 @@ export default function AdminDashboardPage() {
     resolver: zodResolver(materialSchema),
     defaultValues: { title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', file: undefined },
   });
-
-  const getFileNameFromUrl = (url: string) => {
-    if (!url) return '';
-    try {
-        const pathWithToken = url.split('/o/')[1];
-        const path = pathWithToken.split('?')[0];
-        const decodedPath = decodeURIComponent(path);
-        const filename = decodedPath.substring(decodedPath.lastIndexOf('/') + 1);
-        const userFriendlyName = filename.substring(filename.indexOf('_') + 1);
-        return userFriendlyName || filename;
-    } catch (e) {
-        console.error("Error extracting filename:", e);
-        return 'Unknown file';
-    }
-  };
 
   const fetchAllData = React.useCallback(async () => {
     setLoading({ materials: true, feedback: true, bugs: true, social: true });

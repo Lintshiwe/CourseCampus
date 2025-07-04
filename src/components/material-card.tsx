@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Presentation, Video, Download, Eye, BookCopy, FileQuestion, FileCheck, FlaskConical, NotebookPen } from 'lucide-react';
 import { incrementMaterialDownload } from '@/services/firestore';
 import { useToast } from "@/hooks/use-toast";
+import { getFileNameFromUrl } from '@/lib/utils';
 
 type MaterialCardProps = {
   material: Material;
@@ -48,7 +49,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
     <Card className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300">
       <CardHeader>
         <div className="flex justify-between items-start">
-          <CardTitle className="font-headline text-lg mb-1">{material.title}</CardTitle>
+          <CardTitle className="font-headline text-lg mb-1 bg-secondary p-2 rounded-md">{material.title}</CardTitle>
           <div className="text-primary" title={material.type}>{typeIcons[material.type] || <FileText className="w-5 h-5" />}</div>
         </div>
         <CardDescription className="font-body">{material.course}</CardDescription>
@@ -64,6 +65,10 @@ export function MaterialCard({ material }: MaterialCardProps) {
         <div className="flex flex-wrap gap-2 text-xs">
            <Badge variant="outline">Year {material.year}</Badge>
            <Badge variant="outline">Sem {material.semester}</Badge>
+        </div>
+        <div className="flex items-center text-sm text-muted-foreground pt-2">
+            <FileText className="w-4 h-4 mr-2 shrink-0" />
+            <span className="truncate" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</span>
         </div>
       </CardContent>
       <CardFooter className="flex-col items-stretch space-y-2">
