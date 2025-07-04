@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -76,6 +76,7 @@ export default function AdminDashboardPage() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
+  const [adminSearchTerm, setAdminSearchTerm] = React.useState('');
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
@@ -222,6 +223,19 @@ export default function AdminDashboardPage() {
     return Object.entries(dataByFaculty).map(([name, downloads]) => ({ name, downloads }));
   }, [materials, loading.materials]);
 
+  const filteredAdminMaterials = React.useMemo(() => {
+    if (!adminSearchTerm) return materials;
+    const lowercasedTerm = adminSearchTerm.toLowerCase();
+    return materials.filter(material => 
+        material.title.toLowerCase().includes(lowercasedTerm) ||
+        material.course.toLowerCase().includes(lowercasedTerm) ||
+        material.faculty.toLowerCase().includes(lowercasedTerm) ||
+        material.program.toLowerCase().includes(lowercasedTerm) ||
+        material.lecturer.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [materials, adminSearchTerm]);
+
+
   return (
     <div className="container mx-auto py-4">
       <Tabs defaultValue="analytics">
@@ -317,12 +331,21 @@ export default function AdminDashboardPage() {
             <CardHeader>
                 <div className="flex justify-between items-center"><CardTitle>Course Materials</CardTitle><Button onClick={handleAddNewClick}><PlusCircle className="mr-2 h-4 w-4" /> Add New</Button></div>
                 <CardDescription>Manage the course materials available in the app.</CardDescription>
+                <div className="relative pt-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search materials..."
+                        className="pl-9"
+                        value={adminSearchTerm}
+                        onChange={(e) => setAdminSearchTerm(e.target.value)}
+                    />
+                </div>
             </CardHeader>
             <CardContent>
                 {loading.materials ? <LoadingSkeleton /> : (
-                   <Table><TableHeader><TableRow><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Course</TableHead><TableHead>Faculty</TableHead><TableHead>Type</TableHead><TableHead>Downloads</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                   <Table><TableHeader><TableRow><TableHead className="w-[50px]">#</TableHead><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Course</TableHead><TableHead>Faculty</TableHead><TableHead>Type</TableHead><TableHead>Downloads</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {materials.map((material) => (<TableRow key={material.id}><TableCell className="font-medium">{material.title}</TableCell><TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell><TableCell>{material.course}</TableCell><TableCell>{material.faculty}</TableCell><TableCell><Badge variant="secondary">{material.type}</Badge></TableCell><TableCell>{material.downloads}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}
+                      {filteredAdminMaterials.map((material, index) => (<TableRow key={material.id}><TableCell className="font-medium">{index + 1}</TableCell><TableCell className="font-medium">{material.title}</TableCell><TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell><TableCell>{material.course}</TableCell><TableCell>{material.faculty}</TableCell><TableCell><Badge variant="secondary">{material.type}</Badge></TableCell><TableCell>{material.downloads}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}
                     </TableBody></Table>
                 )}
             </CardContent>
