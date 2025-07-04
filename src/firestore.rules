@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if a user is an admin
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Materials: Anyone can read, only admins can write/delete.
+    // Exception: Anyone can increment the download count.
+    match /materials/{materialId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if (isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloads']) &&
+                    request.resource.data.downloads == resource.data.downloads + 1));
+    }
+    
+    // Feedback & Bug Reports: Anyone can create, only admins can read/delete.
+    match /feedback/{feedbackId} {
+        allow create: if true;
+        allow read, delete: if isAdmin();
+    }
+    
+    match /bug-reports/{reportId} {
+        allow create: if true;
+        allow read, delete: if isAdmin();
+    }
+    
+    // Social Links: Anyone can read, only admins can write.
+    match /social-links/{linkId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Analytics: Anyone can update visit count, only admins can read.
+    match /analytics/siteStats {
+      allow read: if isAdmin();
+      // Allow anyone to increment the 'visits' field.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visits']) &&
+                       request.resource.data.visits == resource.data.visits + 1;
+      // Allow creation if the document does not exist yet.
+      allow create: if true;
+    }
+  }
+}

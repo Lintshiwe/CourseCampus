@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink, BugReport } from '@/types';
 
 // Generic function to fetch a collection
@@ -72,4 +72,31 @@ export const updateSocialLinks = async (links: SocialLink[]) => {
         console.error("Error updating social links:", error);
         throw error;
     }
+};
+
+// Analytics
+export const getSiteStats = async () => {
+    try {
+        const statsRef = doc(db, 'analytics', 'siteStats');
+        const docSnap = await getDoc(statsRef);
+        if (docSnap.exists()) {
+            return docSnap.data() as { visits: number };
+        }
+        return { visits: 0 };
+    } catch (error) {
+        console.error("Error fetching site stats:", error);
+        return { visits: 0 };
+    }
+};
+
+export const incrementSiteVisit = () => {
+    const statsRef = doc(db, 'analytics', 'siteStats');
+    return updateDoc(statsRef, {
+        visits: increment(1)
+    }).catch(error => {
+        if (error.code === 'not-found') {
+            return setDoc(statsRef, { visits: 1 });
+        }
+        console.error("Error incrementing site visit:", error);
+    });
 };

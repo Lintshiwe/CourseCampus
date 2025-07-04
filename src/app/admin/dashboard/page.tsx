@@ -14,13 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
@@ -65,7 +65,8 @@ export default function AdminDashboardPage() {
   const [feedback, setFeedback] = React.useState<Feedback[]>([]);
   const [bugReports, setBugReports] = React.useState<BugReport[]>([]);
   const [socialLinks, setSocialLinks] = React.useState<SocialLink[]>([]);
-  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true });
+  const [siteVisits, setSiteVisits] = React.useState(0);
+  const [loading, setLoading] = React.useState({ materials: true, feedback: true, bugs: true, social: true, stats: true });
   const [isSaving, setIsSaving] = React.useState(false);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
@@ -76,23 +77,25 @@ export default function AdminDashboardPage() {
   });
 
   const fetchAllData = React.useCallback(async () => {
-    setLoading({ materials: true, feedback: true, bugs: true, social: true });
-    const [materialsData, feedbackData, bugReportsData, socialLinksData] = await Promise.all([
+    setLoading({ materials: true, feedback: true, bugs: true, social: true, stats: true });
+    const [materialsData, feedbackData, bugReportsData, socialLinksData, statsData] = await Promise.all([
         getMaterials(),
         getFeedback(),
         getBugReports(),
         getSocialLinks(),
+        getSiteStats(),
     ]);
     
     setMaterials(materialsData);
     setFeedback(feedbackData);
     setBugReports(bugReportsData);
+    setSiteVisits(statsData.visits);
 
     const defaultLinks: SocialLink[] = [ { id: 'facebook', name: 'Facebook', url: '' }, { id: 'twitter', name: 'Twitter', url: '' }, { id: 'linkedin', name: 'LinkedIn', url: '' } ];
     const mergedLinks = defaultLinks.map(defaultLink => socialLinksData.find(dbLink => dbLink.id === defaultLink.id) || defaultLink);
     setSocialLinks(mergedLinks);
     
-    setLoading({ materials: false, feedback: false, bugs: false, social: false });
+    setLoading({ materials: false, feedback: false, bugs: false, social: false, stats: false });
   }, []);
 
   React.useEffect(() => {
@@ -227,7 +230,19 @@ export default function AdminDashboardPage() {
                     <CardTitle>Platform Analytics</CardTitle>
                     <CardDescription>Insights into platform usage and user engagement.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-6">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                       <Card>
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                              <CardTitle className="text-sm font-medium">Total Website Visits</CardTitle>
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                          </CardHeader>
+                          <CardContent>
+                            {loading.stats ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">{siteVisits.toLocaleString()}</div>}
+                            <p className="text-xs text-muted-foreground">Total number of times the homepage has been loaded.</p>
+                          </CardContent>
+                       </Card>
+                    </div>
                     {loading.materials ? <LoadingSkeleton /> : (
                          <Card>
                             <CardHeader>
