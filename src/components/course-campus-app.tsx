@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 import { MaterialCard } from './material-card';
 import type { Material, SocialLink } from '@/types';
-import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2 } from 'lucide-react';
+import { BookOpenCheck, Bug, Facebook, Linkedin, MessageSquareQuote, Search, Twitter, Shield, Loader2, Mail } from 'lucide-react';
 import { getMaterials, addFeedback, addBugReport, getSocialLinks, logVisit } from '@/services/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -112,6 +113,32 @@ export function CourseCampusApp() {
     });
   }, [materials, searchTerm, filters]);
 
+  const groupedMaterials = React.useMemo(() => {
+    const grouped = filteredMaterials.reduce((acc, material) => {
+        const program = material.program || 'General';
+        const semester = `Semester ${material.semester}`;
+        
+        if (!acc[program]) {
+            acc[program] = {};
+        }
+        if (!acc[program][semester]) {
+            acc[program][semester] = [];
+        }
+        acc[program][semester].push(material);
+        
+        return acc;
+    }, {} as Record<string, Record<string, Material[]>>);
+
+    return Object.keys(grouped).sort().reduce(
+      (obj, key) => { 
+        obj[key] = grouped[key]; 
+        return obj;
+      }, 
+      {} as Record<string, Record<string, Material[]>>
+    );
+  }, [filteredMaterials]);
+
+
   const handleFeedbackSubmit = async () => {
     if (!feedbackText.trim()) { toast({ variant: "destructive", title: "Empty Feedback", description: "Please enter your feedback before submitting." }); return; }
     setIsSubmitting(true);
@@ -179,13 +206,26 @@ export function CourseCampusApp() {
                     <DialogFooter><Button onClick={handleBugReportSubmit} disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Report Bug</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
+             <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Contact Us">
+                    <a href="mailto:contact@coursecampus.com" aria-label="Contact Us">
+                        <Mail />
+                        <span>Contact Us</span>
+                    </a>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem><SidebarMenuButton href="/admin/login" tooltip="Admin Login"><Shield /><span>Admin</span></SidebarMenuButton></SidebarMenuItem>
           </SidebarMenu>
           <Separator className="my-2 bg-sidebar-border" />
-          <div className="flex items-center justify-center gap-4 p-4 group-data-[collapsible=icon]:hidden">
-                <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Facebook className="h-5 w-5" /></a>
-                <a href={socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Twitter className="h-5 w-5" /></a>
-                <a href={socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Linkedin className="h-5 w-5" /></a>
+          <div className="flex flex-col items-center justify-center gap-2 p-4 group-data-[collapsible=icon]:hidden">
+                <div className="flex items-center gap-4">
+                    <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Facebook className="h-5 w-5" /></a>
+                    <a href={socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Twitter className="h-5 w-5" /></a>
+                    <a href={socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="text-sidebar-foreground/70 hover:text-sidebar-foreground"><Linkedin className="h-5 w-5" /></a>
+                </div>
+                 <p className="text-xs text-sidebar-foreground/50 mt-2">
+                    &copy; {new Date().getFullYear()} CourseCampus by sladethedeciever
+                 </p>
           </div>
         </SidebarFooter>
       </Sidebar>
@@ -194,11 +234,28 @@ export function CourseCampusApp() {
           <div className="flex items-center gap-4"><SidebarTrigger className="md:hidden" /><h2 className="font-headline text-2xl font-bold">Course Materials</h2></div>
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {loading ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}</div>) : 
-             filteredMaterials.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredMaterials.map(material => (<MaterialCard key={material.id} material={material} />))}
-                </div>
+            {loading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}</div>
+            ) : Object.keys(groupedMaterials).length > 0 ? (
+                <Accordion type="multiple" defaultValue={Object.keys(groupedMaterials)} className="w-full space-y-4">
+                    {Object.entries(groupedMaterials).map(([program, semesters]) => (
+                        <AccordionItem value={program} key={program} className="border-b-0">
+                           <h3 className="font-headline text-xl font-bold mb-2">{program}</h3>
+                            {Object.entries(semesters).map(([semester, materials]) => (
+                                <AccordionItem value={`${program}-${semester}`} key={`${program}-${semester}`} className="border rounded-lg mb-4">
+                                     <AccordionTrigger className="px-4 py-2 text-lg font-semibold bg-muted/50 rounded-t-lg">
+                                        {semester}
+                                     </AccordionTrigger>
+                                     <AccordionContent className="p-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                            {materials.map(material => (<MaterialCard key={material.id} material={material} />))}
+                                        </div>
+                                     </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </AccordionItem>
+                    ))}
+                </Accordion>
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-20">
                     <Search className="w-16 h-16 mb-4" /><h3 className="text-xl font-headline font-semibold">No Materials Found</h3><p className="max-w-md mt-2">Your search and filter criteria did not match any materials. Please try again.</p>
@@ -209,3 +266,5 @@ export function CourseCampusApp() {
     </SidebarProvider>
   );
 }
+
+    
