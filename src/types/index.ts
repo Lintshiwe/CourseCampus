@@ -12,8 +12,6 @@ export type Material = {
   lecturer: string;
   uploadDate: any; 
   downloads: number;
-  isAccessible: boolean;
-  helpful?: number;
 };
 
 export type Feedback = {
