@@ -18,7 +18,7 @@ import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, 
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
@@ -73,6 +73,21 @@ export default function AdminDashboardPage() {
     resolver: zodResolver(materialSchema),
     defaultValues: { title: '', course: '', faculty: 'Engineering', program: '', lecturer: '', year: 1, semester: 1, type: 'Lecture Slides', file: undefined },
   });
+
+  const getFileNameFromUrl = (url: string) => {
+    if (!url) return '';
+    try {
+        const pathWithToken = url.split('/o/')[1];
+        const path = pathWithToken.split('?')[0];
+        const decodedPath = decodeURIComponent(path);
+        const filename = decodedPath.substring(decodedPath.lastIndexOf('/') + 1);
+        const userFriendlyName = filename.substring(filename.indexOf('_') + 1);
+        return userFriendlyName || filename;
+    } catch (e) {
+        console.error("Error extracting filename:", e);
+        return 'Unknown file';
+    }
+  };
 
   const fetchAllData = React.useCallback(async () => {
     setLoading({ materials: true, feedback: true, bugs: true, social: true });
@@ -311,7 +326,12 @@ export default function AdminDashboardPage() {
             name="file"
             render={({ field: { onChange, value, ...rest } }) => (
               <FormItem>
-                <FormLabel>Material File {editingMaterial && "(Optional: leave blank to keep existing file)"}</FormLabel>
+                <FormLabel>Material File</FormLabel>
+                {editingMaterial?.url && (
+                    <div className="text-sm text-muted-foreground">
+                        Current: <a href={editingMaterial.url} target="_blank" rel="noopener noreferrer" className="underline">{getFileNameFromUrl(editingMaterial.url)}</a>
+                    </div>
+                )}
                 <FormControl>
                     <Input 
                         type="file" 
@@ -321,6 +341,7 @@ export default function AdminDashboardPage() {
                          {...rest}
                     />
                 </FormControl>
+                {editingMaterial && <FormDescription>Leave blank to keep the current file.</FormDescription>}
                 <FormMessage />
               </FormItem>
             )}
