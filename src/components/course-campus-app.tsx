@@ -97,6 +97,7 @@ export function CourseCampusApp() {
   
   const filteredMaterials = materials.filter(material => {
     return (
+      material.isAccessible &&
       (material.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
        material.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
        material.lecturer.toLowerCase().includes(searchTerm.toLowerCase())) &&
@@ -197,7 +198,7 @@ export function CourseCampusApp() {
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-20">
-                    <Search className="w-16 h-16 mb-4" /><h3 className="text-xl font-headline font-semibold">No Materials Found</h3><p className="max-w-md mt-2">Your search and filter criteria did not match any materials. Please try again.</p>
+                    <Search className="w-16 h-16 mb-4" /><h3 className="text-xl font-headline font-semibold">No Materials Found</h3><p className="max-w-md mt-2">Your search and filter criteria did not match any materials, or no materials are currently accessible. Please try again later.</p>
                 </div>
             )}
         </main>

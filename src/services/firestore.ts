@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, startAt, endAt } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, setDoc, addDoc, serverTimestamp, query, orderBy, updateDoc, increment, getDoc, startAt, endAt, writeBatch } from 'firebase/firestore';
 import type { Material, Feedback, SocialLink, BugReport } from '@/types';
 import { format, subDays, eachDayOfInterval } from 'date-fns';
 
@@ -29,17 +29,30 @@ async function getCollection<T>(collectionName: string, orderField?: string, ord
 // Materials
 export const getMaterials = () => getCollection<Material>('materials', 'uploadDate', 'desc');
 
-export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads'>) => {
+export const addMaterial = (materialData: Omit<Material, 'id' | 'uploadDate' | 'downloads' | 'isAccessible'>) => {
     return addDoc(collection(db, 'materials'), {
         ...materialData,
         uploadDate: serverTimestamp(),
         downloads: 0,
+        isAccessible: true,
     });
 };
 
 export const updateMaterial = (id: string, materialData: Partial<Omit<Material, 'id'>>) => {
     const materialRef = doc(db, 'materials', id);
     return updateDoc(materialRef, materialData);
+};
+
+export const batchUpdateMaterialsAccessibility = async (updates: { id: string; isAccessible: boolean }[]) => {
+    if (updates.length === 0) return;
+    
+    const batch = writeBatch(db);
+    updates.forEach(update => {
+        const materialRef = doc(db, 'materials', update.id);
+        batch.update(materialRef, { isAccessible: update.isAccessible });
+    });
+    
+    await batch.commit();
 };
 
 export const deleteMaterial = (id: string) => deleteDoc(doc(db, 'materials', id));

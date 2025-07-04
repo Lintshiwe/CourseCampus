@@ -15,17 +15,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import type { Material, Feedback, BugReport, SocialLink } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users, Search } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Users, Search, Eye, EyeOff, GitCompareArrows } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats, getDailyVisits } from '@/services/firestore';
+import { getMaterials, deleteMaterial, addMaterial, updateMaterial, getFeedback, deleteFeedback, getSocialLinks, updateSocialLinks, getBugReports, deleteBugReport, getSiteStats, getDailyVisits, batchUpdateMaterialsAccessibility } from '@/services/firestore';
 import { storage } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { getFileNameFromUrl } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 const materialSchema = z.object({
     title: z.string().min(1, "Title is required"),
@@ -77,6 +78,7 @@ export default function AdminDashboardPage() {
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
   const [adminSearchTerm, setAdminSearchTerm] = React.useState('');
+  const [isBatchUpdating, setIsBatchUpdating] = React.useState(false);
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
@@ -141,26 +143,13 @@ export default function AdminDashboardPage() {
             return;
         }
 
-        const { file: _file, ...dataToSave } = values;
-        const finalData = { ...dataToSave, url: downloadURL };
+        const { file: _file, ...finalData } = values;
         
-        const materialDataForDb: Omit<Material, 'id' | 'uploadDate' | 'downloads'> = {
-            title: finalData.title,
-            course: finalData.course,
-            faculty: finalData.faculty,
-            program: finalData.program,
-            year: finalData.year,
-            semester: finalData.semester,
-            type: finalData.type,
-            url: finalData.url,
-            lecturer: finalData.lecturer,
-        };
-
         if (editingMaterial) {
-            await updateMaterial(editingMaterial.id, materialDataForDb);
+            await updateMaterial(editingMaterial.id, { ...finalData, url: downloadURL });
             toast({ title: "Success", description: "Material updated successfully." });
         } else {
-            await addMaterial(materialDataForDb);
+            await addMaterial({ ...finalData, url: downloadURL });
             toast({ title: "Success", description: "New material added successfully." });
         }
         setIsFormOpen(false);
@@ -209,6 +198,59 @@ export default function AdminDashboardPage() {
   const handleSocialLinkChange = (id: SocialLink['id'], url: string) => {
       setSocialLinks(prev => prev.map(link => link.id === id ? { ...link, url } : link));
   };
+  
+  const handleAccessibilityToggle = async (id: string, isAccessible: boolean) => {
+    setMaterials(prev => prev.map(m => m.id === id ? { ...m, isAccessible } : m));
+    try {
+        await updateMaterial(id, { isAccessible });
+        toast({ title: 'Status Updated', description: `Material is now ${isAccessible ? 'accessible' : 'inaccessible'}.` });
+    } catch (error) {
+        setMaterials(prev => prev.map(m => m.id === id ? { ...m, isAccessible: !isAccessible } : m));
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to update status.' });
+    }
+  };
+
+  const getCurrentSemester = () => {
+    const month = new Date().getMonth(); // 0 = January
+    if (month >= 1 && month <= 5) return 1; // Feb - June
+    if (month >= 6 && month <= 11) return 2; // July - Dec
+    return 0; // Vacation (Jan)
+  }
+
+  const handleBatchAccessibilityUpdate = async (mode: 'sync' | 'all-visible' | 'all-hidden') => {
+      setIsBatchUpdating(true);
+      
+      let updates: { id: string; isAccessible: boolean }[] = [];
+      const currentSemester = getCurrentSemester();
+
+      if (mode === 'sync') {
+          updates = materials.map(m => ({
+              id: m.id,
+              isAccessible: m.semester === currentSemester
+          }));
+      } else {
+          const isAccessible = mode === 'all-visible';
+          updates = materials.map(m => ({
+              id: m.id,
+              isAccessible,
+          }));
+      }
+
+      try {
+          await batchUpdateMaterialsAccessibility(updates);
+          setMaterials(prev => prev.map(material => {
+              const update = updates.find(u => u.id === material.id);
+              return update ? { ...material, isAccessible: update.isAccessible } : material;
+          }));
+          toast({ title: "Success", description: "All materials have been updated." });
+      } catch (error) {
+          console.error("Batch update failed:", error);
+          toast({ variant: 'destructive', title: "Error", description: "Failed to update materials." });
+      } finally {
+          setIsBatchUpdating(false);
+      }
+  };
+
 
   const analyticsData = React.useMemo(() => {
     if (loading.materials) return [];
@@ -340,12 +382,47 @@ export default function AdminDashboardPage() {
                         onChange={(e) => setAdminSearchTerm(e.target.value)}
                     />
                 </div>
+                <div className="flex justify-between items-center pt-4">
+                    <div className="text-sm text-muted-foreground">Manage material visibility</div>
+                    <div className="flex gap-2">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm" disabled={isBatchUpdating || materials.length === 0}>
+                                    <GitCompareArrows className="mr-2 h-4 w-4" /> Sync with Semester
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Sync with Current Semester?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will make materials for the current semester accessible and hide others. This overrides any manual settings. Are you sure?
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleBatchAccessibilityUpdate('sync')} disabled={isBatchUpdating}>
+                                        {isBatchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        Yes, Sync
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                        <Button size="sm" onClick={() => handleBatchAccessibilityUpdate('all-visible')} disabled={isBatchUpdating || materials.length === 0}>
+                            {isBatchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+                            Make All Visible
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => handleBatchAccessibilityUpdate('all-hidden')} disabled={isBatchUpdating || materials.length === 0}>
+                            {isBatchUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <EyeOff className="mr-2 h-4 w-4" />}
+                            Make All Hidden
+                        </Button>
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
                 {loading.materials ? <LoadingSkeleton /> : (
-                   <Table><TableHeader><TableRow><TableHead className="w-[50px]">#</TableHead><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Course</TableHead><TableHead>Faculty</TableHead><TableHead>Type</TableHead><TableHead>Downloads</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                   <Table><TableHeader><TableRow><TableHead className="w-[50px]">#</TableHead><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Course</TableHead><TableHead>Faculty</TableHead><TableHead>Type</TableHead><TableHead>Downloads</TableHead><TableHead>Accessible</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {filteredAdminMaterials.map((material, index) => (<TableRow key={material.id}><TableCell className="font-medium">{index + 1}</TableCell><TableCell className="font-medium">{material.title}</TableCell><TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell><TableCell>{material.course}</TableCell><TableCell>{material.faculty}</TableCell><TableCell><Badge variant="secondary">{material.type}</Badge></TableCell><TableCell>{material.downloads}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}
+                      {filteredAdminMaterials.map((material, index) => (<TableRow key={material.id}><TableCell className="font-medium">{index + 1}</TableCell><TableCell className="font-medium">{material.title}</TableCell><TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline text-sm hover:text-primary truncate block max-w-48" title={getFileNameFromUrl(material.url)}>{getFileNameFromUrl(material.url)}</a></TableCell><TableCell>{material.course}</TableCell><TableCell>{material.faculty}</TableCell><TableCell><Badge variant="secondary">{material.type}</Badge></TableCell><TableCell>{material.downloads}</TableCell><TableCell><Switch checked={material.isAccessible} onCheckedChange={(checked) => handleAccessibilityToggle(material.id, checked)} aria-label="Toggle material accessibility" /></TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => handleEditClick(material)}><FilePenLine className="h-4 w-4" /></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the material.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(material.id, 'material')}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></TableCell></TableRow>))}
                     </TableBody></Table>
                 )}
             </CardContent>
