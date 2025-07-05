@@ -84,7 +84,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
             </span>
          </div>
          <div className="flex justify-end gap-2 pt-2 border-t">
-            {material.course?.toLowerCase().includes('information security') && (
+            {(material.title?.toLowerCase().includes('information security') || material.title?.toLowerCase().includes('operating system')) && (
                  <Dialog>
                     <DialogTrigger asChild>
                         <Button variant="destructive" size="sm">
