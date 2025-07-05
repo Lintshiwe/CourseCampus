@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen, Terminal } from 'lucide-react';
 import { incrementMaterialDownload } from '@/services/firestore';
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Terminux } from './terminux';
 
 type MaterialCardProps = {
@@ -87,9 +87,8 @@ export function MaterialCard({ material }: MaterialCardProps) {
             {(material.title?.toLowerCase().includes('information security') || material.title?.toLowerCase().includes('operating system')) && (
                  <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="destructive" size="sm">
-                            <Terminal className="mr-2 h-4 w-4" />
-                            Open Terminal
+                        <Button variant="ghost" size="icon" title="Open Terminal" className="h-9 w-9">
+                            <Terminal className="h-4 w-4" />
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-3xl p-0 border-0">
