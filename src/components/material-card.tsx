@@ -56,11 +56,11 @@ export function MaterialCard({ material }: MaterialCardProps) {
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        // Fallback for browsers that don't support it: copy the direct file link
-        await navigator.clipboard.writeText(material.url);
+        // Fallback for browsers that don't support it: copy the page link
+        await navigator.clipboard.writeText(window.location.href);
         toast({
           title: "Link Copied",
-          description: "A direct link to the material has been copied to your clipboard.",
+          description: "A link to the CourseCampus page has been copied to your clipboard.",
         });
       }
     } catch (error) {
@@ -121,11 +121,11 @@ export function MaterialCard({ material }: MaterialCardProps) {
                         </a>
                     </Button>
                 )}
+            </div>
+            <div className="flex items-center gap-2">
                  <Button variant="ghost" size="icon" title="Share" className="h-9 w-9" onClick={handleShare}>
                     <Share2 className="h-4 w-4" />
                 </Button>
-            </div>
-            <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handlePreview}>
                   <Eye className="mr-2 h-4 w-4" />
                   Preview
