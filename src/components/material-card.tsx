@@ -5,9 +5,11 @@ import type { Material } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen } from 'lucide-react';
+import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen, Terminal } from 'lucide-react';
 import { incrementMaterialDownload } from '@/services/firestore';
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Terminux } from './terminux';
 
 type MaterialCardProps = {
   material: Material;
@@ -28,7 +30,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
     try {
         await incrementMaterialDownload(material.id);
         // Optimistically update downloads count on the client
-        material.downloads += 1; 
+        material.downloads = (material.downloads || 0) + 1; 
         window.open(material.url, '_blank');
     } catch (e) {
         toast({
@@ -78,10 +80,23 @@ export function MaterialCard({ material }: MaterialCardProps) {
                 Uploaded: {material.uploadDate ? new Date(material.uploadDate).toLocaleDateString() : 'N/A'}
             </span>
             <span>
-                {material.downloads} Downloads
+                {material.downloads || 0} Downloads
             </span>
          </div>
          <div className="flex justify-end gap-2 pt-2 border-t">
+            {material.course?.toLowerCase().includes('information security') && (
+                 <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                            <Terminal className="mr-2 h-4 w-4" />
+                            Open Terminal
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-3xl p-0 border-0">
+                        <Terminux />
+                    </DialogContent>
+                </Dialog>
+            )}
             <Button variant="outline" size="sm" onClick={handlePreview}>
               <Eye className="mr-2 h-4 w-4" />
               Preview
