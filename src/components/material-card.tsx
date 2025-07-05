@@ -94,10 +94,10 @@ export function MaterialCard({ material }: MaterialCardProps) {
            <Badge variant="outline">Sem {material.semester}</Badge>
         </div>
         {material.fileName && (
-            <div className="flex items-center gap-2 pt-2 text-sm text-muted-foreground">
-                <FileText className="h-4 w-4" />
+            <a href={material.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 pt-2 text-sm text-muted-foreground underline hover:text-primary truncate">
+                <FileText className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">{material.fileName}</span>
-            </div>
+            </a>
         )}
       </CardContent>
       <CardFooter className="flex-col items-stretch space-y-2 pt-4">

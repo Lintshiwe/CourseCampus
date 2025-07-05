@@ -539,7 +539,7 @@ export default function AdminDashboardPage() {
                           <TableCell className="font-medium">{material.title}</TableCell>
                            <TableCell>
                             <a href={material.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary flex items-center gap-2">
-                                <FileText className="h-4 w-4" />
+                                <FileText className="h-4 w-4 flex-shrink-0" />
                                 {material.fileName}
                             </a>
                            </TableCell>
