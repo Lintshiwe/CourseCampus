@@ -5,7 +5,7 @@ import * as React from 'react';
 
 const commands: Record<string, string | string[]> = {
     help: [
-        'Terminux v1.1 - CourseCampus Shell',
+        'Terminux v1.2 - CourseCampus Shell',
         'Available commands:',
         '  help          - Show this help message',
         '  ls [-la]      - List files in the current directory',
@@ -100,53 +100,84 @@ const sudoCommands: Record<string, string[]> = {
     ]
 }
 
+const banner = [
+    '   ____                  _              ',
+    '  / __ \\____  _   __   _(_)___ ___  _   __',
+    ' / / / / __ \\| | / /  | / __ `__ \\| | / /',
+    '/ /_/ / /_/ /| |/ /   | / / / / / /| |/ / ',
+    '\\____/ .___/ |___/   _|_/_/ /_/ /_/ |___/  ',
+    '    /_/            /___/                  ',
+    '',
+    'Welcome to Terminux v1.2. Type "help" for commands.'
+]
+
 export function Terminux() {
-    const [history, setHistory] = React.useState<string[]>(['Welcome to Terminux! Type "help" to see available commands.']);
+    const [history, setHistory] = React.useState<string[]>(banner);
+    const [commandHistory, setCommandHistory] = React.useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = React.useState<number>(-1);
     const [input, setInput] = React.useState('');
     const [isPasswordPrompt, setIsPasswordPrompt] = React.useState(false);
     const [commandToRun, setCommandToRun] = React.useState('');
     const endOfHistoryRef = React.useRef<HTMLDivElement>(null);
+    const inputRef = React.useRef<HTMLInputElement>(null);
 
     React.useEffect(() => {
         endOfHistoryRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [history]);
+    
+    React.useEffect(() => {
+        inputRef.current?.focus();
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInput(e.target.value);
     };
 
     const processCommand = (command: string) => {
-        const lowerCommand = command.toLowerCase().trim();
+        const trimmedCommand = command.trim();
+        let newHistory = [...history, `$ ${command}`];
+        
+        if (trimmedCommand) {
+            setCommandHistory(prev => [trimmedCommand, ...prev]);
+            setHistoryIndex(-1);
+        } else {
+             setHistory(newHistory);
+             return;
+        }
 
-        if (lowerCommand === 'clear') {
+        if (trimmedCommand === 'clear') {
             setHistory([]);
             return;
         }
         
         let output: string | string[] | undefined;
-        let newHistory = [...history, `$ ${command}`];
 
-        if(lowerCommand.startsWith('sudo ')){
-             const sudoKey = `sudo ${lowerCommand.substring(5).trim()}`;
+        if(trimmedCommand.startsWith('sudo ')){
+             const sudoKey = `sudo ${trimmedCommand.substring(5).trim()}`;
              output = sudoCommands[sudoKey];
              if(output){
                 setCommandToRun(sudoKey);
                 setIsPasswordPrompt(true);
-                newHistory.push('[sudo] password for guest:');
+                newHistory.push(output[0]); // Push the password prompt
              } else {
-                newHistory.push(`sudo: ${lowerCommand.substring(5).trim()}: command not found`);
+                newHistory.push(`sudo: ${trimmedCommand.substring(5).trim()}: command not found`);
              }
         } else {
-            output = commands[lowerCommand];
+            output = commands[trimmedCommand];
         }
 
-        if(!output && !newHistory.includes('[sudo] password for guest:')) {
+        if(!output && !newHistory.some(l => l.startsWith('[sudo]'))) {
             output = `Command not found: ${command}`;
         }
         
         if (output) {
             if (Array.isArray(output)) {
-                newHistory.push(...output);
+                // For sudo commands, we already added the prompt
+                if(isPasswordPrompt) {
+                     // Do nothing, password prompt is already shown.
+                } else {
+                    newHistory.push(...output);
+                }
             } else {
                 newHistory.push(output);
             }
@@ -155,17 +186,18 @@ export function Terminux() {
         setHistory(newHistory);
     };
     
-    const handlePasswordSubmit = (password: string) => {
+    const handlePasswordSubmit = () => {
         setIsPasswordPrompt(false);
         let newHistory = [...history];
-
-        // Any password works for the simulation
+        
+        // Mock password check
         if (commandToRun && sudoCommands[commandToRun]) {
-             if (Array.isArray(sudoCommands[commandToRun])) {
+             const output = sudoCommands[commandToRun];
+             if (Array.isArray(output)) {
                 // The password prompt is already in history, so we skip the first line.
-                newHistory.push(...sudoCommands[commandToRun].slice(1));
+                newHistory.push(...output.slice(1));
             } else {
-                newHistory.push(sudoCommands[commandToRun]);
+                newHistory.push(output);
             }
         } else {
             newHistory.push('Sorry, try again.');
@@ -179,22 +211,34 @@ export function Terminux() {
         if (e.key === 'Enter') {
             e.preventDefault();
             if (isPasswordPrompt) {
-                handlePasswordSubmit(input);
-            } else if (input.trim()) {
-                processCommand(input.trim());
+                handlePasswordSubmit();
             } else {
-                setHistory([...history, '$ ']);
+                processCommand(input);
             }
             setInput('');
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+                const newIndex = historyIndex + 1;
+                setHistoryIndex(newIndex);
+                setInput(commandHistory[newIndex]);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex > -1) {
+                const newIndex = historyIndex - 1;
+                setHistoryIndex(newIndex);
+                setInput(newIndex >= 0 ? commandHistory[newIndex] : '');
+            }
         }
     };
 
     return (
-        <div className="bg-black text-green-400 font-code p-4 rounded-lg h-96 w-full flex flex-col overflow-hidden" onClick={e => (e.currentTarget.querySelector('input') as HTMLInputElement)?.focus()}>
+        <div className="bg-black text-green-400 font-code p-4 rounded-lg h-96 w-full flex flex-col overflow-hidden" onClick={() => inputRef.current?.focus()}>
             <div className="flex-grow overflow-y-auto pr-2">
                 {history.map((line, index) => (
                     <div key={index} className="whitespace-pre-wrap">
-                        {line.startsWith('[sudo] password') ? <span>{line}</span> : line}
+                        {line}
                     </div>
                 ))}
                 <div ref={endOfHistoryRef} />
@@ -202,15 +246,18 @@ export function Terminux() {
             <div className="flex items-center mt-2">
                 <span className="text-green-400 mr-2">{isPasswordPrompt ? '' : '$'}</span>
                 <input
+                    ref={inputRef}
                     type={isPasswordPrompt ? 'password' : 'text'}
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     className="bg-transparent border-none text-green-400 w-full focus:outline-none focus:ring-0"
-                    autoFocus
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                 />
             </div>
         </div>
     );
 }
-
