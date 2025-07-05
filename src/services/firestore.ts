@@ -109,12 +109,10 @@ export const getSiteStats = async (): Promise<SiteStats> => {
 };
 
 export const getDailyVisits = async (): Promise<DailyVisit[]> => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoTimestamp = Timestamp.fromDate(thirtyDaysAgo);
-
     const collRef = collection(db, 'dailyVisits');
-    const q = query(collRef, where('date', '>=', thirtyDaysAgoTimestamp), orderBy('date', 'asc'));
+    // Fetch all daily visits, ordered by date.
+    // The client will handle filtering/aggregation by period.
+    const q = query(collRef, orderBy('date', 'asc'));
 
     try {
         const querySnapshot = await getDocs(q);

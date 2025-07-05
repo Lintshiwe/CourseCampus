@@ -75,6 +75,7 @@ export default function AdminDashboardPage() {
   const [editingMaterial, setEditingMaterial] = React.useState<Material | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedMaterials, setSelectedMaterials] = React.useState<string[]>([]);
+  const [visitsPeriod, setVisitsPeriod] = React.useState<'days' | 'months' | 'year'>('days');
 
   const form = useForm<MaterialFormValues>({
     resolver: zodResolver(materialSchema),
@@ -220,28 +221,80 @@ export default function AdminDashboardPage() {
   }, [materials, loading.analytics]);
 
   const dailyVisitsChartData = React.useMemo(() => {
-    if (loading.analytics) return [];
-    
-    const last30Days = new Map<string, number>();
-    for (let i = 29; i >= 0; i--) {
-        const d = new Date();
+    if (loading.analytics || !dailyVisits) return [];
+  
+    if (visitsPeriod === 'days') {
+      const last30Days = new Map<string, number>();
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const key = d.toLocaleDateString('en-CA');
+        const key = d.toLocaleDateString('en-CA'); // YYYY-MM-DD
         last30Days.set(key, 0);
-    }
-    
-    dailyVisits.forEach(visit => {
-        const key = visit.date.toLocaleDateString('en-CA');
-        if (last30Days.has(key)) {
+      }
+  
+      dailyVisits.forEach(visit => {
+        if (visit.date) {
+          const key = visit.date.toLocaleDateString('en-CA');
+          if (last30Days.has(key)) {
             last30Days.set(key, visit.count);
+          }
         }
-    });
-
-    return Array.from(last30Days.entries()).map(([date, visits]) => ({
+      });
+  
+      return Array.from(last30Days.entries()).map(([date, visits]) => ({
         date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         visits
-    }));
-  }, [dailyVisits, loading.analytics]);
+      }));
+    }
+  
+    if (visitsPeriod === 'months') {
+      const monthlyVisits = new Map<string, number>();
+      const today = new Date();
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthlyVisits.set(key, 0);
+      }
+  
+      dailyVisits.forEach(visit => {
+        if (visit.date) {
+          const key = `${visit.date.getFullYear()}-${String(visit.date.getMonth() + 1).padStart(2, '0')}`;
+          if (monthlyVisits.has(key)) {
+            monthlyVisits.set(key, (monthlyVisits.get(key) || 0) + visit.count);
+          }
+        }
+      });
+  
+      return Array.from(monthlyVisits.entries()).map(([date, visits]) => {
+        const [year, month] = date.split('-');
+        const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+        return {
+          date: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          visits
+        };
+      });
+    }
+  
+    if (visitsPeriod === 'year') {
+      const yearlyVisits = new Map<string, number>();
+      dailyVisits.forEach(visit => {
+        if (visit.date) {
+          const year = visit.date.getFullYear().toString();
+          yearlyVisits.set(year, (yearlyVisits.get(year) || 0) + visit.count);
+        }
+      });
+  
+      return Array.from(yearlyVisits.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([year, visits]) => ({
+          date: year,
+          visits
+        }));
+    }
+  
+    return [];
+  }, [dailyVisits, loading.analytics, visitsPeriod]);
 
   const filteredMaterials = React.useMemo(() => {
     return materials.filter(material =>
@@ -339,20 +392,49 @@ export default function AdminDashboardPage() {
                 <CardContent className="space-y-6">
                     {loading.analytics ? <LoadingSkeleton /> : (
                          <div className="grid gap-6">
-                             <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Total Website Visits</CardTitle>
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{siteStats?.totalVisits ?? 0}</div>
-                                    <p className="text-xs text-muted-foreground">Total number of times the site has been visited.</p>
-                                </CardContent>
-                            </Card>
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <Card>
+                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                        <CardTitle className="text-sm font-medium">Total Website Visits</CardTitle>
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{siteStats?.totalVisits ?? 0}</div>
+                                        <p className="text-xs text-muted-foreground">Total number of times the site has been visited.</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="lg:col-span-2">
+                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                        <CardTitle className="text-sm font-medium">Material Downloads</CardTitle>
+                                        <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{materials.reduce((acc, m) => acc + (m.downloads || 0), 0)}</div>
+                                        <p className="text-xs text-muted-foreground">Total downloads across all materials.</p>
+                                    </CardContent>
+                                </Card>
+                            </div>
 
                             <Card>
-                                <CardHeader>
-                                    <CardTitle>Daily Website Visits (Last 30 Days)</CardTitle>
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <div>
+                                        <CardTitle className="text-lg">Website Visits</CardTitle>
+                                        <CardDescription>
+                                            {visitsPeriod === 'days' && 'Unique daily visits for the last 30 days.'}
+                                            {visitsPeriod === 'months' && 'Aggregated monthly visits for the last 12 months.'}
+                                            {visitsPeriod === 'year' && 'Aggregated yearly visits.'}
+                                        </CardDescription>
+                                    </div>
+                                    <Select value={visitsPeriod} onValueChange={(value) => setVisitsPeriod(value as any)}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Select period" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="days">Last 30 Days</SelectItem>
+                                            <SelectItem value="months">Last 12 Months</SelectItem>
+                                            <SelectItem value="year">Yearly</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </CardHeader>
                                 <CardContent className="h-80 pl-2">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -378,13 +460,14 @@ export default function AdminDashboardPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Material Downloads by Faculty</CardTitle>
+                                    <CardDescription>Breakdown of material downloads per faculty.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="h-96">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={downloadsByFacultyData}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} interval={0} />
-                                            <YAxis />
+                                            <YAxis allowDecimals={false} />
                                             <Legend />
                                             <Bar dataKey="downloads" fill="hsl(var(--primary))" />
                                         </BarChart>
