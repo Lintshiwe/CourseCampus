@@ -8,8 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen, Terminal } from 'lucide-react';
 import { incrementMaterialDownload } from '@/services/firestore';
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
-import { Terminux } from './terminux';
 
 type MaterialCardProps = {
   material: Material;
@@ -85,16 +83,11 @@ export function MaterialCard({ material }: MaterialCardProps) {
          </div>
          <div className="flex justify-end gap-2 pt-2 border-t">
             {(material.title?.toLowerCase().includes('information security') || material.title?.toLowerCase().includes('operating system')) && (
-                 <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="ghost" size="icon" title="Open Terminal" className="h-9 w-9">
-                            <Terminal className="h-4 w-4" />
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-3xl p-0 border-0">
-                        <Terminux />
-                    </DialogContent>
-                </Dialog>
+                <Button variant="ghost" size="icon" title="Open Terminal" className="h-9 w-9" asChild>
+                    <a href="https://terminux.live/" target="_blank" rel="noopener noreferrer">
+                        <Terminal className="h-4 w-4" />
+                    </a>
+                </Button>
             )}
             <Button variant="outline" size="sm" onClick={handlePreview}>
               <Eye className="mr-2 h-4 w-4" />
