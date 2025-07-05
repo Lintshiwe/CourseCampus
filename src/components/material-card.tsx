@@ -48,15 +48,13 @@ export function MaterialCard({ material }: MaterialCardProps) {
     const shareData = {
       title: `CourseCampus: ${material.title}`,
       text: `Check out "${material.title}" on CourseCampus.`,
-      url: window.location.href, // The URL of the current page
+      url: window.location.href,
     };
 
     try {
-      // Use Web Share API if it's available
       if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        // Fallback for browsers that don't support it: copy the page link
         await navigator.clipboard.writeText(window.location.href);
         toast({
           title: "Link Copied",
@@ -64,7 +62,6 @@ export function MaterialCard({ material }: MaterialCardProps) {
         });
       }
     } catch (error) {
-      // Don't show an error if the user cancels the share dialog
       if (error instanceof Error && error.name !== 'AbortError') {
         toast({
           variant: 'destructive',

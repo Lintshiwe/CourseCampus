@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { Material, Feedback, BugReport, SocialLink, SiteStats, DailyVisit } from '@/types';
-import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, RefreshCw, Eye, EyeOff, Users } from 'lucide-react';
+import { FilePenLine, Trash2, Facebook, Twitter, Linkedin, Loader2, PlusCircle, BarChart2, Bug, Search, RefreshCw, Eye, EyeOff, Users, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -301,7 +301,7 @@ export default function AdminDashboardPage() {
       (material.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
        material.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
        material.lecturer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       material.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       (material.fileName && material.fileName.toLowerCase().includes(searchTerm.toLowerCase())) ||
        material.program.toLowerCase().includes(searchTerm.toLowerCase()) ||
        material.faculty.toLowerCase().includes(searchTerm.toLowerCase()))
     );
@@ -522,7 +522,7 @@ export default function AdminDashboardPage() {
                                <TableHead className="w-12"><Checkbox onCheckedChange={(checked) => setSelectedMaterials(checked ? filteredMaterials.map(m=>m.id) : [])} checked={selectedMaterials.length === filteredMaterials.length && filteredMaterials.length > 0} /></TableHead>
                                <TableHead className="w-12">#</TableHead>
                                <TableHead>Title</TableHead>
-                               <TableHead>File</TableHead>
+                               <TableHead>File Name</TableHead>
                                <TableHead>Course</TableHead>
                                <TableHead>Faculty</TableHead>
                                <TableHead>Type</TableHead>
@@ -537,7 +537,12 @@ export default function AdminDashboardPage() {
                           <TableCell><Checkbox onCheckedChange={(checked) => setSelectedMaterials(checked ? [...selectedMaterials, material.id] : selectedMaterials.filter(id => id !== material.id))} checked={selectedMaterials.includes(material.id)} /></TableCell>
                           <TableCell className="font-medium">{index + 1}</TableCell>
                           <TableCell className="font-medium">{material.title}</TableCell>
-                          <TableCell><a href={material.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">{material.fileName}</a></TableCell>
+                           <TableCell>
+                            <a href={material.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                {material.fileName}
+                            </a>
+                           </TableCell>
                           <TableCell>{material.course}</TableCell>
                           <TableCell>{material.faculty}</TableCell>
                           <TableCell><Badge variant="secondary">{material.type}</Badge></TableCell>
