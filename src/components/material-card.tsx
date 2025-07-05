@@ -5,7 +5,7 @@ import type { Material } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen, Terminal } from 'lucide-react';
+import { FileText, Presentation, Download, Eye, FileQuestion, FileCheck, FlaskConical, NotebookPen, Terminal, Share2 } from 'lucide-react';
 import { incrementMaterialDownload } from '@/services/firestore';
 import { useToast } from "@/hooks/use-toast";
 
@@ -44,6 +44,37 @@ export function MaterialCard({ material }: MaterialCardProps) {
      window.open(material.url, '_blank');
   }
 
+  const handleShare = async () => {
+    const shareData = {
+      title: `CourseCampus: ${material.title}`,
+      text: `Check out "${material.title}" on CourseCampus.`,
+      url: window.location.href, // The URL of the current page
+    };
+
+    try {
+      // Use Web Share API if it's available
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback for browsers that don't support it: copy the direct file link
+        await navigator.clipboard.writeText(material.url);
+        toast({
+          title: "Link Copied",
+          description: "A direct link to the material has been copied to your clipboard.",
+        });
+      }
+    } catch (error) {
+      // Don't show an error if the user cancels the share dialog
+      if (error instanceof Error && error.name !== 'AbortError') {
+        toast({
+          variant: 'destructive',
+          title: 'Share Failed',
+          description: 'Could not share or copy the link.'
+        });
+      }
+    }
+  };
+
   return (
     <Card className="flex flex-col h-full hover:shadow-lg transition-shadow duration-300 bg-card">
       <CardHeader>
@@ -81,22 +112,29 @@ export function MaterialCard({ material }: MaterialCardProps) {
                 {material.downloads || 0} Downloads
             </span>
          </div>
-         <div className="flex justify-end gap-2 pt-2 border-t">
-            {(material.title?.toLowerCase().includes('information security') || material.title?.toLowerCase().includes('operating system')) && (
-                <Button variant="ghost" size="icon" title="Open Terminal" className="h-9 w-9" asChild>
-                    <a href="https://terminux.live/" target="_blank" rel="noopener noreferrer">
-                        <Terminal className="h-4 w-4" />
-                    </a>
+         <div className="flex justify-between items-center pt-2 border-t">
+            <div className="flex gap-1">
+                {(material.title?.toLowerCase().includes('information security') || material.title?.toLowerCase().includes('operating system')) && (
+                    <Button variant="ghost" size="icon" title="Open Terminal" className="h-9 w-9" asChild>
+                        <a href="https://terminux.live/" target="_blank" rel="noopener noreferrer">
+                            <Terminal className="h-4 w-4" />
+                        </a>
+                    </Button>
+                )}
+                 <Button variant="ghost" size="icon" title="Share" className="h-9 w-9" onClick={handleShare}>
+                    <Share2 className="h-4 w-4" />
                 </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={handlePreview}>
-              <Eye className="mr-2 h-4 w-4" />
-              Preview
-            </Button>
-            <Button size="sm" onClick={handleDownload}>
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </Button>
+            </div>
+            <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handlePreview}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Preview
+                </Button>
+                <Button size="sm" onClick={handleDownload}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+            </div>
          </div>
       </CardFooter>
     </Card>
