@@ -3,8 +3,7 @@
 ```
 # 🎓 CourseCampus
 
-A full-stack ed-tech experiment blending web learning with command-line confidence. Built with ❤️ for students who love to tinker.
-
+A full-stack ed-tech experiment blending web learning with command-line confidence.
 ---
 
 ## ✨ Features
